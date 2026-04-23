@@ -1,0 +1,1617 @@
+import { useState, useEffect, useRef } from 'react';
+import { collection, query, getDocs, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, deleteDoc, setDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout } from '../lib/supabase';
+import { useForm } from 'react-hook-form';
+import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
+import { generateObligationPDF } from '../utils/pdfGenerator';
+import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+
+import { AlertModal } from '../components/ui/AlertModal';
+import { useAlert } from '../hooks/useAlert';
+
+type Task = {
+  id: string;
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  staffName: string;
+  createdAt: any;
+};
+
+type ServiceRecord = {
+  id: string;
+  studentName: string;
+  studentNo: string;
+  studentEmail: string;
+  program: string;
+  section: string;
+  bracket: string;
+  taskTitle: string;
+  date: string;
+  timeIn: string;
+  timeOut: string;
+  creditHours: number;
+  staffName?: string;
+  status: 'pending' | 'verified' | 'active';
+  startTime?: any;
+};
+
+type TaskFormData = {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  staffName: string;
+};
+
+type AdminMember = {
+  id: string;
+  displayName: string;
+  email: string;
+  photoURL?: string;
+  role: 'developer' | 'admin' | 'staff' | 'student_assistant';
+  lastLogin: any;
+  signature?: string;
+};
+
+type StudentProgress = {
+  studentNo: string;
+  studentName: string;
+  studentEmail: string;
+  program: string;
+  section: string;
+  bracket: string;
+  totalHours: number;
+  verifiedHours: number;
+  records: ServiceRecord[];
+  hasNameMismatch?: boolean;
+  allNames?: string[];
+  approval?: CompletionApproval;
+};
+
+type CompletionApproval = {
+  id: string;
+  studentNo: string;
+  approverName: string;
+  approverRole: string;
+  approverSignature: string;
+  approvedAt: any;
+};
+
+export default function Admin() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [records, setRecords] = useState<ServiceRecord[]>([]);
+  const [members, setMembers] = useState<AdminMember[]>([]);
+  const [approvals, setApprovals] = useState<CompletionApproval[]>([]);
+  const [tab, setTab] = useState<'tasks' | 'records' | 'progress' | 'members' | 'history' | 'settings'>('tasks');
+  const [submittingTask, setSubmittingTask] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskSearch, setTaskSearch] = useState('');
+  const [editingRecord, setEditingRecord] = useState<ServiceRecord | null>(null);
+  const [staffOption, setStaffOption] = useState<'me' | 'other'>('me');
+  const [savingSignature, setSavingSignature] = useState(false);
+  const adminSigCanvas = useRef<SignatureCanvas>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [profileForm, setProfileForm] = useState({ displayName: '', role: '' });
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+
+  // Settings
+  const [allowSignups, setAllowSignups] = useState(true);
+
+  const { register, handleSubmit, reset, setValue } = useForm<TaskFormData>();
+  const recordForm = useForm<ServiceRecord>();
+
+  const navigate = useNavigate();
+  const { modal, showAlert, hideAlert } = useAlert();
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      if (u) {
+        try {
+          const userRef = doc(db, 'admins', u.uid);
+          
+          // Initial setup for first-time login
+          const userDoc = await getDoc(userRef);
+          let userRole = '';
+          if (!userDoc.exists() || !userDoc.data().role) {
+             userRole = u.email === 'christiantomaque18@gmail.com' ? 'developer' : 'student_assistant';
+             await setDoc(userRef, {
+              email: u.email,
+              photoURL: u.photoURL,
+              displayName: u.displayName || 'New User',
+              role: userRole, 
+              lastLogin: serverTimestamp()
+            }, { merge: true });
+          } else {
+             userRole = userDoc.data().role;
+             // Update admin profile on every login (only essential info)
+             await setDoc(userRef, {
+               email: u.email,
+               photoURL: u.photoURL,
+               lastLogin: serverTimestamp()
+             }, { merge: true });
+          }
+
+          // Strict Role Check for Admin Dashboard
+          if (userRole !== 'developer' && userRole !== 'admin') {
+            showAlert(
+              "Access Restricted",
+              "You do not have the required permissions to access the Admin Dashboard. Only Developers and Administrators can access this portal.",
+              "error",
+              () => {
+                if (userRole === 'staff' || userRole === 'student_assistant') {
+                  navigate('/staff');
+                } else {
+                  navigate('/portal');
+                }
+              }
+            );
+          }
+        } catch (e) {
+          console.error("Auth routing init error", e);
+        }
+      }
+      setLoadingAuth(false);
+    });
+    return () => unsub();
+  }, [showAlert, navigate]);
+
+  const fetchData = async () => {
+    try {
+      const qTasks = query(collection(db, 'tasks'), orderBy('date', 'desc'));
+      const qRecords = query(collection(db, 'service_records'), orderBy('createdAt', 'desc'));
+      const qMembers = query(collection(db, 'admins'), orderBy('lastLogin', 'desc'));
+      const qApprovals = query(collection(db, 'completions'));
+      
+      const [snapTasks, snapRecords, snapMembers, snapApprovals] = await Promise.all([
+        getDocs(qTasks), 
+        getDocs(qRecords),
+        getDocs(qMembers),
+        getDocs(qApprovals)
+      ]);
+      
+      setTasks(snapTasks.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+      setRecords(snapRecords.docs.map(d => ({ id: d.id, ...d.data() } as ServiceRecord)));
+      const membersData = snapMembers.docs.map(d => ({ id: d.id, ...d.data() } as AdminMember));
+      setMembers(membersData);
+      setApprovals(snapApprovals.docs.map(d => ({ id: d.id, ...d.data() } as CompletionApproval)));
+
+      // Set profile form
+      const currentMember = membersData.find(m => m.id === user?.uid);
+      if (currentMember) {
+        setProfileForm({ 
+          displayName: currentMember.displayName, 
+          role: currentMember.role 
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      showAlert("Error", "Failed to load data. Make sure you are authenticated. Error: " + e.message, "error");
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+      const fetchSettings = async () => {
+        try {
+          const snap = await getDoc(doc(db, 'settings', 'global'));
+          if (snap.exists() && snap.data().allowSignups !== undefined) {
+            setAllowSignups(snap.data().allowSignups);
+          }
+        } catch (e) {
+          console.error("Failed to fetch settings:", e);
+        }
+      };
+      if (tab === 'members') fetchSettings();
+    }
+  }, [user, tab]);
+
+  const handleToggleSignups = async () => {
+    try {
+      const newValue = !allowSignups;
+      await setDoc(doc(db, 'settings', 'global'), { allowSignups: newValue }, { merge: true });
+      setAllowSignups(newValue);
+      showAlert("Settings Updated", newValue ? "System signups enabled." : "System signups disabled.", "success");
+    } catch (error) {
+       console.error("Failed to update settings", error);
+       showAlert("Error", "Failed to update system settings.", "error");
+    }
+  };
+
+  const handleUploadSignature = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showAlert("Invalid File", "Please upload an image file.", "warning");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      setSavingSignature(true);
+      try {
+        await updateDoc(doc(db, 'admins', user!.uid), {
+          signature: base64,
+          updatedAt: serverTimestamp()
+        });
+        showAlert("Success", "Signature uploaded successfully!", "success");
+        fetchData();
+      } catch (err) {
+        console.error(err);
+        showAlert("Error", "Upload failed.", "error");
+      } finally {
+        setSavingSignature(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsUpdatingProfile(true);
+    try {
+      await updateDoc(doc(db, 'admins', user.uid), {
+        displayName: profileForm.displayName,
+        role: profileForm.role,
+        updatedAt: serverTimestamp()
+      });
+      showAlert("Profile Updated", "Your profile information has been successfully updated.", "success");
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      showAlert("Error", "Failed to update profile.", "error");
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
+  const saveAdminSignature = async () => {
+    if (!adminSigCanvas.current || adminSigCanvas.current.isEmpty()) {
+       showAlert("Wait!", "Please provide a signature first.", "warning");
+       return;
+    }
+
+    setSavingSignature(true);
+    try {
+      if (!user) throw new Error("No authenticated user");
+      let signatureData = '';
+      try {
+        signatureData = adminSigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+      } catch (e) {
+        console.warn("Trimming failed, saving raw canvas", e);
+        signatureData = adminSigCanvas.current.getCanvas().toDataURL('image/png');
+      }
+      
+      const userRef = doc(db, 'admins', user.uid);
+      await setDoc(userRef, {
+        signature: signatureData,
+        lastLogin: serverTimestamp() 
+      }, { merge: true });
+      
+      showAlert("Success", "Signature saved successfully!", "success");
+      fetchData();
+    } catch (error: any) {
+      console.error('Error saving signature:', error);
+      showAlert("Error", "Failed to save signature: " + error.message, "error");
+    } finally {
+      setSavingSignature(false);
+    }
+  };
+
+  const onTaskSubmit = async (data: TaskFormData) => {
+    setSubmittingTask(true);
+    try {
+      // --- TIME VALIDATION CHECKS ---
+      const today = getTodayYYYYMMDD();
+      const now = new Date();
+      const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      // Prevent selecting a past time if the task is scheduled for today
+      if (data.date === today && data.startTime < currentTimeStr) {
+        showAlert("Invalid Time", "You cannot schedule a task to start in the past today.", "warning");
+        setSubmittingTask(false);
+        return;
+      }
+
+      // Prevent the end time from being before the start time
+      if (data.endTime <= data.startTime) {
+         showAlert("Invalid Schedule", "End time must be after the start time.", "warning");
+         setSubmittingTask(false);
+         return;
+      }
+
+      // Calculate duration robustly
+      const [startH, startM] = data.startTime.split(':').map(Number);
+      const [endH, endM] = data.endTime.split(':').map(Number);
+      
+      let durationHours = 0;
+      if (!isNaN(startH) && !isNaN(endH)) {
+        durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+        if (durationHours < 0) durationHours += 24;
+      }
+
+      if (isNaN(durationHours) || durationHours < 0) durationHours = 0;
+
+      // Set staffName if 'me' option is active but field might be empty due to reset
+      if (staffOption === 'me' && !data.staffName) {
+        data.staffName = user?.displayName || user?.email || '';
+      }
+
+      const taskPayload = {
+        title: data.title,
+        date: data.date,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        staffName: data.staffName,
+        duration: Number(durationHours.toFixed(2)),
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingTask) {
+        await updateDoc(doc(db, 'tasks', editingTask.id), taskPayload);
+        setEditingTask(null);
+      } else {
+        await addDoc(collection(db, 'tasks'), {
+          ...taskPayload,
+          createdAt: serverTimestamp()
+        });
+      }
+      
+      reset();
+      fetchData();
+    } catch (e: any) {
+      console.error("Task submission error:", e);
+      showAlert("Error", `Error saving task: ${e.message || 'Unknown error'}`, "error");
+    } finally {
+      setSubmittingTask(false);
+    }
+  };
+
+  const handleEditTask = (task: Task) => {
+    if (records.some(r => r.taskTitle === task.title && r.date === task.date)) {
+      showAlert("Task Locked", "This task has already been picked by students and cannot be modified.", "warning");
+      return;
+    }
+    setEditingTask(task);
+    setValue('title', task.title);
+    setValue('date', task.date);
+    setValue('startTime', task.startTime);
+    setValue('endTime', task.endTime);
+    setValue('staffName', task.staffName);
+    
+    // Set dropdown option based on if it matches current user
+    const currentUserName = user?.displayName || user?.email || '';
+    if (task.staffName === currentUserName) {
+      setStaffOption('me');
+    } else {
+      setStaffOption('other');
+    }
+    
+    setTab('tasks');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (task && records.some(r => r.taskTitle === task.title && r.date === task.date)) {
+      showAlert("Task Locked", "This task has already been picked by students and cannot be deleted.", "warning");
+      return;
+    }
+    if (!window.confirm("Delete this task? All records linked to it will remain but orphaned from the schedule.")) return;
+    try {
+      await deleteDoc(doc(db, 'tasks', id));
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleEditRecord = (record: ServiceRecord) => {
+    setEditingRecord(record);
+    Object.keys(record).forEach((key) => {
+      recordForm.setValue(key as any, (record as any)[key]);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteRecord = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this service log? This cannot be undone.")) return;
+    try {
+      await deleteDoc(doc(db, 'service_records', id));
+      fetchData();
+      showAlert("Success", "Service log has been deleted.", "success");
+    } catch (e) {
+      console.error(e);
+      showAlert("Error", "Failed to delete record.", "error");
+    }
+  };
+
+  const handleStartSession = async (record: ServiceRecord) => {
+    try {
+      const now = new Date();
+      // Keep the HH:MM format for the 'timeIn' text column
+      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      await updateDoc(doc(db, 'service_records', record.id), {
+        startTime: now.toISOString(), // Passes a full valid timestamp string for timestamptz
+        timeIn: timeString,           // Passes "HH:MM" for your text column
+        status: 'active',
+        updatedAt: serverTimestamp()
+      });
+      fetchData();
+      showAlert("Success", "Session started.", "success");
+    } catch (e: any) {
+      console.error("FULL ERROR OBJECT:", e);
+      showAlert("Error", `Failed to start session: ${e.message || "Unknown error"}`, "error");
+    }
+  };
+
+  const handleClockOut = async (record: ServiceRecord) => {
+    try {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      const [startH, startM] = record.timeIn.split(':').map(Number);
+      const [endH, endM] = currentTime.split(':').map(Number);
+      
+      let durationHours = 0;
+      if (!isNaN(startH) && !isNaN(endH)) {
+        durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+        if (durationHours < 0) durationHours += 24;
+      }
+      
+      const creditHours = Math.min(20, Number(durationHours.toFixed(1)));
+      
+      await updateDoc(doc(db, 'service_records', record.id), {
+        timeOut: currentTime,
+        creditHours: creditHours,
+        status: 'pending', // Reset to pending for approval
+        updatedAt: serverTimestamp()
+      });
+      fetchData();
+      showAlert("Success", "Student clocked out successfully.", "success");
+    } catch (e: any) {
+      console.error("FULL ERROR OBJECT:", e);
+      showAlert("Error", `Failed to clock out student: ${e.message || "Unknown error"}`, "error");
+    }
+  };
+
+  const onRecordSubmit = async (data: ServiceRecord) => {
+    try {
+      const { id, ...payload } = data;
+      
+      // Calculate duration
+      const [startH, startM] = data.timeIn.split(':').map(Number);
+      const [endH, endM] = data.timeOut.split(':').map(Number);
+      
+      let durationHours = 0;
+      if (!isNaN(startH) && !isNaN(endH)) {
+        durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+        if (durationHours < 0) durationHours += 24;
+      }
+      
+      // Cap at 20 hours as requested
+      payload.creditHours = Math.min(20, Number(durationHours.toFixed(1)));
+      
+      await updateDoc(doc(db, 'service_records', id), payload as any);
+      setEditingRecord(null);
+      fetchData();
+      showAlert("Success", "Service log updated successfully.", "success");
+    } catch (e) {
+      console.error(e);
+      showAlert("Error", "Failed to update service log.", "error");
+    }
+  };
+
+  const sendCompletionEmail = async (student: StudentProgress) => {
+    try {
+      // Find the most recent record to get semester/AY/signature info
+      const latestRecord = [...student.records].sort((a, b) => b.date.localeCompare(a.date))[0];
+      const adminDoc = members.find(m => m.email === user?.email);
+
+      const pdfBase64 = await generateObligationPDF({
+  studentName: student.studentName,
+  studentNo: student.studentNo,
+  program: student.program,
+  section: student.section,
+  bracket: student.bracket || 'N/A',
+  totalVerifiedHours: student.verifiedHours,
+  semester: (latestRecord as any)?.semester || '1st Semester',
+  academicYear: (latestRecord as any)?.academicYear || `A.Y. ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
+  studentSignature: (latestRecord as any)?.studentSignature,
+  
+  // 1. Prioritize live Admin/Approver signature from your Account Settings
+  approverName: student.approval?.approverName || adminDoc?.displayName || 'Authorized Representative',
+  approverRole: student.approval?.approverRole || (adminDoc?.role === 'admin' ? 'OSA Admin' : 'OSA Staff'),
+  approverSignature: adminDoc?.signature || student.approval?.approverSignature,
+  
+  // 2. Filter and map records to include live Staff signatures
+  records: student.records.filter(r => r.status === 'verified').map(r => {
+    // Look up the staff member in the members list to get their current live signature
+    const liveStaff = members.find(m => m.id === (r as any).verifiedById);
+    
+    return {
+      date: r.date,
+      taskTitle: r.taskTitle,
+      staffName: (r as any).staffName || 'OSA Staff',
+      timeIn: formatTime(r.timeIn),
+      timeOut: formatTime(r.timeOut),
+      creditHours: r.creditHours,
+      // FIX: Use the live signature if found, otherwise fall back to the saved snapshot
+      verifierSignature: liveStaff?.signature || (r as any).verifierSignature,
+      studentSignature: (r as any).studentSignature
+    };
+  })
+});
+
+      const response = await fetch('/api/send-completion-form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: student.studentEmail,
+          studentName: student.studentName,
+          pdfBase64
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        showAlert("Sent", `Completion form successfully sent to ${student.studentEmail}!`, "success");
+      }
+    } catch (e) {
+      console.error("Email send failed", e);
+      showAlert("Error", "Failed to send completion email automatically.", "error");
+    }
+  };
+const handleApproveCompletion = async (student: StudentProgress) => {
+    const adminDoc = members.find(m => m.id === user?.uid);
+    if (!adminDoc || !adminDoc.signature) {
+       showAlert("Action Required", "You must set up your digital signature in Settings before you can approve completions.", "warning");
+       setTab('settings');
+       return;
+    }
+
+    const confirmApproval = window.confirm(`Approve final completion for ${student.studentName}? \n\nThis will apply your signature and role as the official note-taker for their completion form.`);
+    if (!confirmApproval) return;
+
+    try {
+      const approvalData = {
+        studentNo: student.studentNo,
+        approverName: adminDoc.displayName,
+        approverRole: (adminDoc.role === 'admin' || adminDoc.role === 'developer') ? 'Head, Office of Student Affairs' : (adminDoc.role === 'staff' ? 'OSA Staff' : 'Student Assistant, OSA'),
+        approverSignature: adminDoc.signature,
+        approvedAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'completions'), approvalData);
+      showAlert("Approved", `${student.studentName}'s completion has been approved.`, "success");
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      showAlert("Error", "Failed to approve completion.", "error");
+    }
+  };
+
+  const handleUndoApproval = async (approvalId: string, studentName: string) => {
+    const confirmUndo = window.confirm(`Are you sure you want to REVOKE the completion approval for ${studentName}? \n\nThis will return their status to 'Pending Verification'.`);
+    if (!confirmUndo) return;
+
+    try {
+      await deleteDoc(doc(db, 'completions', approvalId));
+      showAlert("Revoked", `Approval for ${studentName} has been successfully undone.`, "success");
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      showAlert("Error", "Failed to undo approval.", "error");
+    }
+  };
+
+  // --- NEW FEATURE: PREVIEW / PRINT PDF ---
+  const handlePreviewPDF = async (student: StudentProgress) => {
+    try {
+      const latestRecord = [...student.records].sort((a, b) => b.date.localeCompare(a.date))[0];
+      const adminDoc = members.find(m => m.email === user?.email);
+
+      // Generate the PDF exactly like the email function does
+      const pdfBase64 = await generateObligationPDF({
+        studentName: student.studentName,
+        studentNo: student.studentNo,
+        program: student.program,
+        section: student.section,
+        bracket: student.bracket || 'N/A',
+        totalVerifiedHours: student.verifiedHours,
+        semester: (latestRecord as any)?.semester || '1st Semester',
+        academicYear: (latestRecord as any)?.academicYear || `A.Y. ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
+        studentSignature: (latestRecord as any)?.studentSignature,
+        approverName: student.approval?.approverName || adminDoc?.displayName || 'Authorized Representative',
+        approverRole: student.approval?.approverRole || (adminDoc?.role === 'admin' ? 'OSA Admin' : 'OSA Staff'),
+        approverSignature: adminDoc?.signature || student.approval?.approverSignature,
+        records: student.records.filter(r => r.status === 'verified').map(r => ({
+          date: r.date,
+          taskTitle: r.taskTitle,
+          staffName: (r as any).staffName || 'OSA Staff',
+          timeIn: formatTime(r.timeIn),
+          timeOut: formatTime(r.timeOut),
+          creditHours: r.creditHours,
+          verifierSignature: (r as any).verifierSignature,
+          studentSignature: (r as any).studentSignature
+        }))
+      });
+
+      // Safely convert base64 to a Blob and open it in a new browser tab for viewing/printing
+      const pdfBlob = await (await fetch(pdfBase64)).blob();
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      window.open(blobUrl, '_blank');
+      
+    } catch (e) {
+      console.error("PDF Preview failed", e);
+      showAlert("Error", "Failed to generate PDF preview.", "error");
+    }
+  };
+
+  const handleVerify = async (recordId: string, currentStatus: string) => {
+    try {
+      const adminDoc = members.find(m => m.id === user?.uid);
+      const newStatus = currentStatus === 'pending' ? 'verified' : 'pending';
+      const ref = doc(db, 'service_records', recordId);
+      
+      await updateDoc(ref, { 
+        status: newStatus,
+        verifiedBy: user?.displayName || user?.email,
+        verifiedById: user?.uid,
+        verifierRole: adminDoc?.role || 'staff',
+        verifierSignature: adminDoc?.signature || null,
+        updatedAt: serverTimestamp()
+      });
+      
+      fetchData();
+      showAlert("Success", `Attendance record has been ${newStatus}.`, "success");
+    } catch (e: any) {
+      console.error("FULL ERROR OBJECT:", e);
+      showAlert("Error", `Verification failed: ${e.message || "Unknown error"}`, "error");
+    }
+  };
+
+  const checkIsWithinSchedule = (record: ServiceRecord) => {
+    // Find the original task to get the strict schedule bounds
+    const task = tasks.find(t => t.title === record.taskTitle && t.date === record.date);
+    if (!task) return true; // If the parent task was deleted, allow manual override
+
+    const now = new Date();
+    // Format current date to YYYY-MM-DD
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    // Strict Date Check
+    if (task.date !== today) return false;
+
+    // Strict Time Check
+    const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    return currentTimeStr >= task.startTime && currentTimeStr <= task.endTime;
+  };
+
+  const studentProgress = Object.values(
+    // Sort by date to ensure we can identify the "latest" name
+    [...records].sort((a, b) => {
+      const dateA = a.date + ' ' + (a.timeIn || '00:00');
+      const dateB = b.date + ' ' + (b.timeIn || '00:00');
+      return dateA.localeCompare(dateB);
+    }).reduce((acc: { [key: string]: StudentProgress }, r) => {
+      if (!acc[r.studentNo]) {
+        acc[r.studentNo] = {
+          studentNo: r.studentNo,
+          studentName: r.studentName, // Initially set the "first" name found
+          studentEmail: (r as any).studentEmail || 'N/A',
+          program: r.program,
+          section: r.section,
+          bracket: r.bracket || 'N/A',
+          totalHours: 0,
+          verifiedHours: 0,
+          records: [],
+          allNames: [r.studentName],
+          approval: approvals.find(ap => ap.studentNo === r.studentNo)
+        };
+      } else {
+        // Update to the latest name found (since we sorted)
+        acc[r.studentNo].studentName = r.studentName;
+        if (!acc[r.studentNo].allNames?.includes(r.studentName)) {
+           acc[r.studentNo].allNames?.push(r.studentName);
+        }
+        if (!acc[r.studentNo].approval) {
+           acc[r.studentNo].approval = approvals.find(ap => ap.studentNo === r.studentNo);
+        }
+      }
+      
+      acc[r.studentNo].totalHours += r.creditHours;
+      if (r.status === 'verified') {
+        acc[r.studentNo].verifiedHours += r.creditHours;
+      }
+      acc[r.studentNo].records.push(r);
+      acc[r.studentNo].hasNameMismatch = (acc[r.studentNo].allNames?.length || 0) > 1;
+      
+      return acc;
+    }, {})
+  ).sort((a, b) => (b as StudentProgress).verifiedHours - (a as StudentProgress).verifiedHours) as StudentProgress[];
+
+  const activeTasks = tasks.filter(t => t.date >= getTodayYYYYMMDD() && t.title.toLowerCase().includes(taskSearch.toLowerCase()));
+  const historyTasks = tasks.filter(t => t.date < getTodayYYYYMMDD());
+
+  if (loadingAuth) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <div className="min-h-screen bg-[#1c1c1c] text-[#ededed] flex flex-col md:flex-row font-sans">
+      {/* Sidebar */}
+      <aside className="w-full md:w-64 border-r border-[#2e2e2e] bg-[#171717] flex flex-col">
+        <div className="p-6 border-b border-[#2e2e2e]">
+          <div className="text-[#ededed] font-bold text-lg flex items-center gap-2 tracking-tight">
+            <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
+              <LayoutDashboard className="w-4 h-4 text-black" />
+            </div>
+            OSA Dashboard
+          </div>
+          <div className="text-xs text-[#a1a1a1] mt-2">{user.email}</div>
+        </div>
+        <nav className="flex-1 p-4 space-y-1">
+          <button 
+            onClick={() => setTab('tasks')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'tasks' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
+          >
+            <Clock className="w-4 h-4" />
+            <span className="text-sm font-medium">Manage Tasks</span>
+          </button>
+          <button 
+            onClick={() => setTab('records')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'records' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
+          >
+            <Users className="w-4 h-4" />
+            <span className="text-sm font-medium">Verify Logs</span>
+            {records.filter(r => r.status === 'pending').length > 0 && (
+              <span className="ml-auto bg-[#3ecf8e] text-black text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {records.filter(r => r.status === 'pending').length}
+              </span>
+            )}
+          </button>
+          <button 
+            onClick={() => setTab('progress')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'progress' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span className="text-sm font-medium">Student Progress</span>
+          </button>
+          <button 
+            onClick={() => setTab('history')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'history' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
+          >
+            <History className="w-4 h-4" />
+            <span className="text-sm font-medium">Task History</span>
+          </button>
+          <button 
+            onClick={() => setTab('members')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'members' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
+          >
+            <Users className="w-4 h-4" />
+            <span className="text-sm font-medium">Members</span>
+          </button>
+          <button 
+            onClick={() => setTab('settings')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'settings' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
+          >
+            <Settings className="w-4 h-4" />
+            <span className="text-sm font-medium">Settings</span>
+          </button>
+          <div className="pt-4 mt-4 border-t border-[#2e2e2e]">
+             <Link 
+              to="/staff"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed] group transition-colors"
+            >
+              <Users className="w-4 h-4 group-hover:text-[#3ecf8e]" />
+              <span className="text-sm font-medium">Switch to Staff Portal</span>
+              <ChevronRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+            </Link>
+          </div>
+        </nav>
+        <div className="p-4 border-t border-[#2e2e2e]">
+          <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed] transition-colors">
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 p-6 md:p-8 md:px-10 overflow-y-auto bg-[#1c1c1c] text-[#ededed]">
+        
+        {tab === 'tasks' && (
+          <div className="space-y-8 max-w-4xl">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">{editingTask ? 'Edit Task' : 'Create New Task'}</h2>
+              <p className="text-[#a1a1a1] text-sm mt-1">Publish available schedule slots for students.</p>
+            </div>
+            
+            <form onSubmit={handleSubmit(onTaskSubmit)} className="bg-[#171717] border border-[#2e2e2e] p-6 rounded-lg grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="space-y-1 md:col-span-4">
+                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Activity / Task Title</label>
+                <input {...register('title', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none placeholder:text-[#a1a1a1]/50" placeholder="e.g. Stage Decorations" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Date</label>
+                <input 
+                  type="date" 
+                  min={getTodayYYYYMMDD()} 
+                  {...register('date', { required: true })} 
+                  className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Start Time</label>
+                <input type="time" {...register('startTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">End Time</label>
+                <input type="time" {...register('endTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Faculty/Staff In-Charge</label>
+                <select 
+                  value={staffOption}
+                  onChange={(e) => {
+                    const opt = e.target.value as 'me' | 'other';
+                    setStaffOption(opt);
+                    if (opt === 'me') {
+                      setValue('staffName', user?.displayName || user?.email || '');
+                    } else {
+                      setValue('staffName', '');
+                    }
+                  }}
+                  className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none"
+                >
+                  <option value="me">Me ({user?.displayName || 'Admin'})</option>
+                  <option value="other">Specify Name...</option>
+                </select>
+                {staffOption === 'other' && (
+                  <input 
+                    {...register('staffName', { required: staffOption === 'other' })} 
+                    className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none placeholder:text-[#a1a1a1]/50" 
+                    placeholder="Enter staff name" 
+                  />
+                )}
+                {staffOption === 'me' && (
+                  <input type="hidden" {...register('staffName')} />
+                )}
+              </div>
+              <div className="md:col-span-4 flex justify-end gap-3">
+                {editingTask && (
+                  <button type="button" onClick={() => { setEditingTask(null); reset(); }} className="px-4 py-2 text-sm font-bold border border-[#2e2e2e] rounded-md">Cancel</button>
+                )}
+                <button disabled={submittingTask} className={`${editingTask ? 'bg-amber-500 hover:bg-amber-600 border-amber-500' : 'bg-[#3ecf8e] hover:bg-[#34b27b] border-[#3ecf8e]'} text-black text-sm font-bold px-4 py-2 rounded-md flex items-center gap-2 transition-colors disabled:opacity-50 border`}>
+                 {submittingTask ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : editingTask ? <Edit2 className="w-4 h-4 text-black" /> : <Plus className="w-4 h-4 text-black" /> }
+                 {editingTask ? 'Update Task' : 'Publish Task'}
+                </button>
+              </div>
+            </form>
+
+            <div className="space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h3 className="text-lg font-bold tracking-tight">Active Published Tasks</h3>
+                <div className="relative w-full md:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+                  <input 
+                    type="text" 
+                    placeholder="Search tasks..." 
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none transition-colors"
+                  />
+                </div>
+              </div>
+              <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717]">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3">Task Title</th>
+                      <th className="px-4 py-3">Schedule</th>
+                      <th className="px-4 py-3">Duration</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2e2e2e]">
+                    {activeTasks.length === 0 ? (
+                      <tr><td colSpan={4} className="px-4 py-4 text-center text-[#a1a1a1]">No active tasks found matching your search.</td></tr>
+                    ) : activeTasks.map(t => (
+                      <tr key={t.id} className="hover:bg-[#1c1c1c]">
+                        <td className="px-4 py-3">
+                           <div className="font-medium text-[#ededed]">{t.title}</div>
+                           <div className="text-[10px] text-[#a1a1a1] uppercase font-bold">{t.staffName}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
+                          <div className="text-[#ededed] mb-1">{formatDate(t.date)}</div>
+                          <div>{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[#3ecf8e] font-bold">{t.duration?.toFixed(1)} hrs</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                             {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
+                               <span className="text-[10px] text-[#555] uppercase font-bold italic pr-2">Task Locked (In Progress)</span>
+                             ) : (
+                               <>
+                                 <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
+                                 <button onClick={() => handleDeleteTask(t.id)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Delete Task"><Trash2 className="w-4 h-4" /></button>
+                               </>
+                             )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'records' && (
+          <div className="space-y-8 max-w-6xl">
+             <div>
+              <h2 className="text-xl font-bold tracking-tight">Service Logs</h2>
+              <p className="text-[#a1a1a1] text-sm mt-1">Review and verify student obligations.</p>
+            </div>
+
+            {editingRecord && (
+              <div className="bg-[#171717] border border-amber-500/50 p-6 rounded-lg space-y-4">
+                <div className="flex justify-between items-center">
+                   <h3 className="text-amber-500 font-bold flex items-center gap-2">
+                     <Edit2 className="w-4 h-4" /> Editing Log for {editingRecord.studentName}
+                   </h3>
+                   <button onClick={() => setEditingRecord(null)} className="text-xs text-[#a1a1a1] hover:text-[#ededed]">Cancel</button>
+                </div>
+                <form onSubmit={recordForm.handleSubmit(onRecordSubmit)} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <div className="space-y-1">
+    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Student Name</label>
+    <input {...recordForm.register('studentName', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" />
+  </div>
+  <div className="space-y-1">
+    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Student No.</label>
+    <input {...recordForm.register('studentNo', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" />
+  </div>
+  {/* NEW FIELD ADDED HERE */}
+  <div className="space-y-1">
+    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Student Email</label>
+    <input 
+      {...recordForm.register('studentEmail', { required: true })} 
+      className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" 
+      placeholder="student@example.com"
+    />
+  </div>
+  <div className="space-y-1">
+    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Program</label>
+    <input {...recordForm.register('program', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" />
+  </div>
+  <div className="space-y-1">
+    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Section</label>
+    <input {...recordForm.register('section', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" />
+  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Date</label>
+                    <input type="date" {...recordForm.register('date', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm [color-scheme:dark]" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Time In</label>
+                    <input type="time" {...recordForm.register('timeIn', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm [color-scheme:dark]" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Time Out</label>
+                    <input type="time" {...recordForm.register('timeOut', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm [color-scheme:dark]" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Staff In-Charge</label>
+                    <input {...recordForm.register('staffName')} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Semester</label>
+                    <select {...recordForm.register('semester' as any)} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none">
+                      <option value="1st Semester">1st Semester</option>
+                      <option value="2nd Semester">2nd Semester</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Academic Year</label>
+                    <input {...recordForm.register('academicYear' as any)} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" placeholder="e.g. 2025 - 2026" />
+                  </div>
+                  <div className="flex items-end md:col-span-4">
+                    <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 rounded text-sm transition-colors">
+                      Save Changes
+                    </button>
+                  </div>
+                  <div className="md:col-span-4 text-[10px] text-amber-500 italic mt-2">
+                    * Credit hours are automatically calculated based on time and capped at 20.0h per log.
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto">
+              <table className="min-w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Beneficiary</th>
+                    <th className="px-4 py-3">Program/Sec</th>
+                    <th className="px-4 py-3">Duty Task</th>
+                    <th className="px-4 py-3">Time Log</th>
+                    <th className="px-4 py-3 text-center">Hours</th>
+                    <th className="px-4 py-3 text-center">Status</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#2e2e2e]">
+                  {records.length === 0 ? (
+                      <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No service logs submitted yet.</td></tr>
+                  ) : records.map(r => (
+                    <tr key={r.id} className="hover:bg-[#1c1c1c]">
+                      <td className="px-4 py-3 flex items-center gap-3">
+                         <div className="w-6 h-6 rounded bg-[#262626] border border-[#2e2e2e] text-[#a1a1a1] text-[10px] flex items-center justify-center font-bold">
+                            {r.studentName.substring(0, 2).toUpperCase()}
+                         </div>
+                         <div>
+                            <div className="font-medium text-[#ededed]">{r.studentName}</div>
+                            <div className="text-[10px] text-[#a1a1a1] font-mono">{r.studentNo}</div>
+                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-[#a1a1a1]">
+                        {r.program} • {r.section}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-[#a1a1a1]">
+                        {r.taskTitle.substring(0, 20)}{r.taskTitle.length > 20 ? '...' : ''}
+                      </td>
+                      <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
+                        {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
+                      </td>
+                      <td className="px-4 py-3 text-center font-bold text-[#ededed]">
+                        {r.creditHours}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/10 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                          {r.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end items-center gap-2">
+                          {(r.status === 'pending' || r.status === 'active') && (
+                            <button 
+                              onClick={() => {
+                                if (!checkIsWithinSchedule(r)) {
+                                  showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                                  return;
+                                }
+                                if (!r.startTime) handleStartSession(r);
+                                else handleClockOut(r);
+                              }}
+                              className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                                r.creditHours >= 20 
+                                  ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                  : !checkIsWithinSchedule(r)
+                                    ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                    : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}
+                              disabled={r.creditHours >= 20}
+                              title={
+                                r.creditHours >= 20 
+                                  ? "Completed" 
+                                  : !checkIsWithinSchedule(r) 
+                                    ? "Outside assigned schedule" 
+                                    : (!r.startTime ? "Start Session" : "Stop Session")
+                              }
+                            >
+                              <Clock className="w-3 h-3" /> 
+                              {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}
+                            </button>
+                          )}
+                          
+                          <button onClick={() => handleEditRecord(r)} className="p-1 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDeleteRecord(r.id)} className="p-1 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <div className="w-px h-4 bg-[#2e2e2e] mx-1"></div>
+                          
+                          <button 
+                            onClick={() => handleVerify(r.id, r.status)}
+                            disabled={r.status === 'active'}
+                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors ${
+                              r.status === 'active' 
+                                ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                : r.status === 'pending' 
+                                  ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b]' 
+                                  : 'border border-[#2e2e2e] text-[#a1a1a1] hover:bg-[#262626] hover:text-[#ededed]'
+                            }`}
+                          >
+                            {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        )}
+
+        {tab === 'progress' && (
+          <div className="space-y-8 max-w-6xl">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">Student Progress Monitoring</h2>
+              <p className="text-[#a1a1a1] text-sm mt-1">Track total hours rendered per student (Goal: 20hrs).</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <div className="bg-[#171717] border border-[#2e2e2e] p-5 rounded-lg">
+                  <div className="text-xs text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Total Students</div>
+                  <div className="text-3xl font-bold">{studentProgress.length}</div>
+               </div>
+               <div className="bg-[#171717] border border-[#2e2e2e] p-5 rounded-lg">
+                  <div className="text-xs text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Completed (20hr+)</div>
+                  <div className="text-3xl font-bold text-[#3ecf8e]">{studentProgress.filter(s => s.verifiedHours >= 20).length}</div>
+               </div>
+               <div className="bg-[#171717] border border-[#2e2e2e] p-5 rounded-lg">
+                  <div className="text-xs text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Pending Verification</div>
+                  <div className="text-3xl font-bold text-amber-500">{studentProgress.filter(s => s.totalHours > s.verifiedHours).length}</div>
+               </div>
+            </div>
+
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto">
+              <table className="min-w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Student Name</th>
+                    <th className="px-4 py-3">Program/Sec</th>
+                    <th className="px-4 py-3">Rendered Hours</th>
+                    <th className="px-4 py-3">Progress</th>
+                    <th className="px-4 py-3">Target</th>
+                    <th className="px-4 py-3 text-right">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#2e2e2e]">
+                  {studentProgress.length === 0 ? (
+                    <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No student data available.</td></tr>
+                  ) : studentProgress.map(s => (
+                    <tr key={s.studentNo} className="hover:bg-[#1c1c1c]">
+                      <td className="px-4 py-3">
+                         <div className="flex items-center gap-2">
+                           <div className="font-medium text-[#ededed]">{s.studentName}</div>
+                           {s.hasNameMismatch && (
+                             <div className="group relative">
+                               <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-help" />
+                               <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-48 p-2 bg-[#2e2e2e] border border-[#3e3e3e] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                 <div className="text-[10px] font-bold text-amber-500 uppercase mb-1">Name Discrepancy</div>
+                                 <div className="text-[9px] text-[#a1a1a1] leading-tight">
+                                   This student ID has been submitted with multiple names:
+                                   <ul className="mt-1 list-disc list-inside">
+                                     {s.allNames?.map((n, i) => <li key={i} className="truncate">{n}</li>)}
+                                   </ul>
+                                   Please edit the Service Logs to standardize the name.
+                                 </div>
+                               </div>
+                             </div>
+                           )}
+                         </div>
+                         <div className="text-[10px] text-[#a1a1a1] font-mono">{s.studentEmail}</div>
+                      </td>
+                      <td className="px-4 py-3 text-[#a1a1a1]">
+                        {s.program} • {s.section}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-[#ededed]">
+                        {s.verifiedHours.toFixed(1)} <span className="text-[#a1a1a1] font-normal">/ {s.totalHours.toFixed(1)} total</span>
+                      </td>
+                      <td className="px-4 py-3 w-48">
+                        <div className="h-1.5 w-full bg-[#262626] rounded-full overflow-hidden">
+                           <div 
+                              className={`h-full rounded-full transition-all duration-1000 ${s.verifiedHours >= 20 ? 'bg-[#3ecf8e]' : 'bg-[#3ecf8e]/40'}`} 
+                              style={{ width: `${Math.min(100, (s.verifiedHours / 20) * 100)}%` }}
+                           />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">20.0 hrs</td>
+                      <td className="px-4 py-3 text-right">
+                        {s.verifiedHours >= 20 ? (
+                           <span className="text-[#3ecf8e] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#3ecf8e]/10 rounded flex items-center gap-1">
+                             <CheckCircle2 className="w-3 h-3" /> Completed
+                           </span>
+                        ) : (
+                           <span className="text-[#a1a1a1] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#262626] rounded">
+                             In Progress
+                           </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {s.approval ? (
+                           <div className="flex flex-col items-end gap-2">
+                             <span className="text-[#3ecf8e] text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 bg-[#3ecf8e]/10 rounded flex items-center gap-1">
+                               <CheckCircle2 className="w-3 h-3" /> Fully Approved
+                             </span>
+                             
+                             <div className="flex items-center gap-1 bg-[#262626] p-1 rounded-lg border border-[#2e2e2e]">
+                               <button
+                                 onClick={() => handlePreviewPDF(s)}
+                                 className="text-blue-400 hover:text-blue-300 transition-colors p-1.5 rounded hover:bg-blue-400/10 flex items-center justify-center"
+                                 title="Preview & Print PDF"
+                               >
+                                 <Printer className="h-4 w-4" />
+                               </button>
+                               <div className="w-px h-4 bg-[#3e3e3e]"></div>
+                               <button
+                                 onClick={() => sendCompletionEmail(s)}
+                                 className="text-emerald-400 hover:text-emerald-300 transition-colors p-1.5 rounded hover:bg-emerald-400/10 flex items-center justify-center"
+                                 title="Resend Email to Student"
+                               >
+                                 <Mail className="h-4 w-4" />
+                               </button>
+                               <div className="w-px h-4 bg-[#3e3e3e]"></div>
+                               <button
+                                 onClick={() => handleUndoApproval(s.approval!.id, s.studentName)}
+                                 className="text-red-400 hover:text-red-300 transition-colors p-1.5 rounded hover:bg-red-400/10 flex items-center justify-center"
+                                 title="Undo Approval"
+                               >
+                                 <RotateCcw className="h-4 w-4" />
+                               </button>
+                             </div>
+                           </div>
+                        ) : s.verifiedHours >= 20 ? (
+                           <button
+                             onClick={() => handleApproveCompletion(s)}
+                             className="bg-amber-500 hover:bg-amber-600 text-black px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-colors flex items-center gap-2 ml-auto shadow-lg shadow-amber-500/10"
+                           >
+                             <CheckCircle2 className="h-3.5 w-3.5" />
+                             Approve Completion
+                           </button>
+                        ) : (
+                          <span className="text-[#a1a1a1] text-[9px] font-medium italic">Requirement not met</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tab === 'history' && (
+          <div className="space-y-8 max-w-6xl">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">Task Execution History</h2>
+              <p className="text-[#a1a1a1] text-sm mt-1">Review completed tasks and corresponding student logs.</p>
+            </div>
+            
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717]">
+               <table className="min-w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                    <tr>
+                       <th className="px-6 py-4">Task Details</th>
+                       <th className="px-6 py-4">In-Charge</th>
+                       <th className="px-6 py-4 text-center">Duration</th>
+                       <th className="px-6 py-4">Executors / Students</th>
+                       <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2e2e2e]">
+                    {historyTasks.length === 0 ? (
+                      <tr><td colSpan={5} className="px-6 py-10 text-center text-[#a1a1a1]">No task history found.</td></tr>
+                    ) : historyTasks.map(t => {
+                      const executors = records.filter(r => r.taskTitle === t.title && r.date === t.date);
+                      return (
+                        <tr key={t.id} className="hover:bg-[#1c1c1c]">
+                           <td className="px-6 py-4">
+                              <div className="font-bold text-[#ededed]">{t.title}</div>
+                              <div className="text-[10px] text-[#a1a1a1] uppercase font-mono">{formatDate(t.date)}</div>
+                           </td>
+                           <td className="px-6 py-4">
+                              <div className="text-xs text-[#ededed]">{t.staffName}</div>
+                              <div className="text-[10px] text-[#a1a1a1]">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                           </td>
+                           <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">
+                              {t.duration?.toFixed(1)}h
+                           </td>
+                           <td className="px-6 py-4">
+                              <div className="flex -space-x-2">
+                                 {executors.slice(0, 4).map((ex, i) => (
+                                    <div key={i} className="w-7 h-7 rounded-full border border-[#171717] bg-[#2e2e2e] flex items-center justify-center text-[10px] font-bold" title={ex.studentName}>
+                                       {ex.studentName.charAt(0)}
+                                    </div>
+                                 ))}
+                                 {executors.length > 4 && (
+                                    <div className="w-7 h-7 rounded-full border border-[#171717] bg-[#3ecf8e]/20 text-[#3ecf8e] flex items-center justify-center text-[10px] font-bold">
+                                       +{executors.length - 4}
+                                    </div>
+                                 )}
+                                 {executors.length === 0 && <span className="text-[10px] italic text-[#444]">No student logs</span>}
+                              </div>
+                           </td>
+                           <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                 {executors.length > 0 ? (
+                                   <span className="text-[9px] text-[#555] uppercase font-bold italic">Locked</span>
+                                 ) : (
+                                   <>
+                                     <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
+                                     <button onClick={() => handleDeleteTask(t.id)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Delete Task"><Trash2 className="w-4 h-4" /></button>
+                                   </>
+                                 )}
+                              </div>
+                           </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+               </table>
+            </div>
+          </div>
+        )}
+
+        {tab === 'members' && (
+          <div className="space-y-8 max-w-6xl">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">System Members & Settings</h2>
+              <p className="text-[#a1a1a1] text-sm mt-1">Directory of Registered OSA Admins and Staff Members, and System Registration Control.</p>
+            </div>
+
+            <div className="bg-[#1c1c1c] rounded-xl border border-[#2e2e2e] overflow-hidden p-6 mb-6">
+              <h3 className="text-[#ededed] font-medium mb-4 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-[#3ecf8e]" />
+                System Settings
+              </h3>
+              <div className="bg-[#171717] rounded-lg p-4 border border-[#2e2e2e] flex items-center justify-between">
+                <div>
+                  <h4 className="text-[#ededed] font-medium tracking-tight text-sm">System Registration</h4>
+                  <p className="text-xs text-[#a1a1a1]">Control whether new users can sign up for an account via the login screen.</p>
+                </div>
+                <button
+                  onClick={handleToggleSignups}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${allowSignups ? 'bg-[#3ecf8e]' : 'bg-[#2e2e2e]'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowSignups ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717]">
+               <table className="min-w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                    <tr>
+                       <th className="px-6 py-4">Status</th>
+                       <th className="px-6 py-4">User Details</th>
+                       <th className="px-6 py-4">System Role</th>
+                       <th className="px-6 py-4">Last Active</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2e2e2e]">
+                    {members.length === 0 ? (
+                      <tr><td colSpan={4} className="px-6 py-10 text-center text-[#a1a1a1]">No members registered yet.</td></tr>
+                    ) : members.map(m => (
+                      <tr key={m.id} className="hover:bg-[#1c1c1c]">
+                        <td className="px-6 py-4">
+                           <div className="flex items-center gap-2">
+                               <div className={`w-2 h-2 rounded-full ${Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]' : 'bg-[#a1a1a1]'}`} />
+                             <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                               {Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'Online' : 'Offline'}
+                             </span>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                           <div className="flex items-center gap-3">
+                             {m.photoURL ? (
+                               <img src={m.photoURL} alt={m.displayName} className="w-8 h-8 rounded-full border border-[#2e2e2e]" referrerPolicy="no-referrer" />
+                             ) : (
+                               <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                 {m.displayName.charAt(0)}
+                               </div>
+                             )}
+                             <div>
+                               <div className="font-bold text-[#ededed]">{m.displayName}</div>
+                               <div className="text-[10px] text-[#a1a1a1]">{m.email}</div>
+                             </div>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                           {(members.find(m => m.id === user?.uid)?.role === 'developer' || 
+                             (members.find(m => m.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
+                             <select
+                               value={m.role}
+                               onChange={async (e) => {
+                                 const newRole = e.target.value as AdminMember['role'];
+                                 try {
+                                   await updateDoc(doc(db, 'admins', m.id), { role: newRole });
+                                   setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
+                                   showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
+                                 } catch (err) {
+                                   showAlert('Error', 'Failed to update user role.', 'error');
+                                 }
+                               }}
+                               className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
+                             >
+                                <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
+                                <option value="admin" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer' && members.find(usr => usr.id === user?.uid)?.role !== 'admin'}>Administrator</option>
+                                <option value="staff">Staff/Faculty</option>
+                                <option value="student_assistant">Student Assistant</option>
+                             </select>
+                           ) : (
+                             <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
+                               {m.role?.replace('_', ' ')}
+                             </span>
+                           )}
+                        </td>
+                        <td className="px-6 py-4 text-[#a1a1a1] text-xs">
+                           {m.lastLogin ? formatDate(new Date(m.lastLogin).toISOString()) : 'Never'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+               </table>
+            </div>
+          </div>
+        )}
+
+        {tab === 'settings' && (
+          <div className="space-y-8 max-w-4xl">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">Account Settings</h2>
+              <p className="text-[#a1a1a1] text-sm mt-1">Manage your profile information and digital signature.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Profile Information */}
+              <div className="bg-[#171717] border border-[#2e2e2e] p-6 rounded-xl shadow-lg space-y-6">
+                <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-[#3ecf8e]">
+                  <Users className="w-4 h-4" /> Personal Information
+                </h3>
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Full Name</label>
+                    <input 
+                      value={profileForm.displayName}
+                      onChange={e => setProfileForm({ ...profileForm, displayName: e.target.value })}
+                      className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" 
+                      placeholder="Your Name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">System Role</label>
+                    <select 
+                      value={profileForm.role}
+                      onChange={e => setProfileForm({ ...profileForm, role: e.target.value as any })}
+                      disabled
+                      className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed outline-none"
+                    >
+                      <option value="developer">Developer</option>
+                      <option value="admin">Administrator</option>
+                      <option value="staff">Staff/Faculty</option>
+                      <option value="student_assistant">Student Assistant</option>
+                    </select>
+                    <p className="text-[9px] text-[#555] italic pt-1">Contact an administrator to change your system role.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Email Address</label>
+                    <input 
+                      value={user?.email || ''} 
+                      disabled 
+                      className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed" 
+                    />
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={isUpdatingProfile}
+                    className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-bold py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isUpdatingProfile ? <Loader2 className="animate-spin w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                    Update Profile
+                  </button>
+                </form>
+              </div>
+
+              {/* Digital Signature */}
+              <div className="bg-[#171717] border border-[#2e2e2e] p-6 rounded-xl shadow-lg space-y-6">
+                <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-[#3ecf8e]">
+                   <Edit2 className="w-4 h-4" /> Digital Signature
+                </h3>
+                <div className="space-y-4">
+                   <div className="border border-[#2e2e2e] bg-[#1c1c1c] rounded-lg p-2 flex flex-col items-center">
+                     <p className="text-[10px] text-[#a1a1a1] mb-2 uppercase font-bold tracking-widest">Draw your signature</p>
+                     <div className="bg-white rounded w-full">
+                       <SignatureCanvas 
+                         ref={adminSigCanvas}
+                         penColor='black' 
+                         canvasProps={{className: 'signature-canvas w-full h-40'}} 
+                       />
+                     </div>
+                     <div className="flex w-full gap-2 mt-2">
+                       <button 
+                         onClick={() => adminSigCanvas.current?.clear()}
+                         className="flex-1 bg-[#262626] hover:bg-[#2e2e2e] py-1.5 rounded text-[10px] font-bold uppercase transition-colors"
+                       >
+                         Clear
+                       </button>
+                       <button 
+                         onClick={saveAdminSignature}
+                         disabled={savingSignature}
+                         className="flex-[2] bg-[#3ecf8e] hover:bg-[#34b27b] text-black py-1.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-2"
+                       >
+                         {savingSignature ? <Loader2 className="animate-spin w-4 h-4" /> : 'Save Drawn'}
+                       </button>
+                     </div>
+                   </div>
+
+                   <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-[#2e2e2e]"></span>
+                      </div>
+                      <div className="relative flex justify-center text-[10px] uppercase">
+                        <span className="bg-[#171717] px-2 text-[#a1a1a1] font-bold">OR</span>
+                      </div>
+                   </div>
+
+                   <div className="space-y-2">
+                      <p className="text-[10px] text-[#a1a1a1] uppercase font-bold tracking-widest text-center">Upload Signature Image</p>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        onChange={handleUploadSignature}
+                        accept="image/*"
+                        className="hidden" 
+                      />
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={savingSignature}
+                        className="w-full border border-[#2e2e2e] border-dashed hover:border-[#3ecf8e]/50 hover:bg-[#3ecf8e]/5 py-4 rounded-lg transition-all flex flex-col items-center gap-2 group"
+                      >
+                         <Upload className="w-6 h-6 text-[#a1a1a1] group-hover:text-[#3ecf8e] transition-colors" />
+                         <span className="text-[10px] font-bold uppercase text-[#a1a1a1] group-hover:text-[#ededed]">Click to upload image</span>
+                      </button>
+                      <p className="text-[9px] text-[#666] text-center italic">Supported: PNG, JPG, JPEG (Max 2MB)</p>
+                   </div>
+
+                   {members.find(m => m.id === user?.uid)?.signature && (
+                      <div className="pt-4 border-t border-[#2e2e2e]">
+                        <p className="text-[10px] text-[#a1a1a1] mb-2 uppercase font-bold tracking-widest">Current Signature</p>
+                        <div className="bg-white p-2 rounded flex justify-center">
+                          <img src={members.find(m => m.id === user?.uid)?.signature} alt="Current Signature" className="h-16 object-contain" />
+                        </div>
+                      </div>
+                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      <AlertModal
+        isOpen={modal.isOpen}
+        onClose={() => {
+          hideAlert();
+          // If this was a permission error, send them back
+          if (modal.title === 'Access Restricted') {
+            window.location.href = '/staff';
+          }
+        }}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+      />
+    </div>
+  );
+}
