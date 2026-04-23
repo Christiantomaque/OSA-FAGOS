@@ -926,7 +926,8 @@ export default function Staff() {
                      <div className="bg-white rounded w-full">
                        <SignatureCanvas 
                          ref={staffSigCanvas}
-                         penColor='black' 
+                         penColor='black'
+                         backgroundColor="white"
                          canvasProps={{className: 'signature-canvas w-full h-40'}} 
                        />
                      </div>

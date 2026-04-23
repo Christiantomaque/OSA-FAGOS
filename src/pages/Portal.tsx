@@ -324,12 +324,13 @@ export default function Portal() {
               </button>
             </div>
             <div className="bg-white rounded-lg overflow-hidden h-32 md:h-40 border-2 border-[#2e2e2e] focus-within:border-[#3ecf8e] transition-all">
-              <SignatureCanvas 
-                ref={sigPad}
-                penColor="black" 
-                canvasProps={{ className: 'w-full h-full cursor-crosshair' }} 
-              />
-            </div>
+  <SignatureCanvas 
+    ref={sigPad}
+    penColor="black" 
+    backgroundColor="white"
+    canvasProps={{ className: 'w-full h-full cursor-crosshair' }} 
+  />
+</div>
           </div>
 
           <div className="pt-6 border-t border-[#2e2e2e] flex items-center justify-between">

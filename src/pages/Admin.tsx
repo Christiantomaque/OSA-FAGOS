@@ -1534,7 +1534,8 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                      <div className="bg-white rounded w-full">
                        <SignatureCanvas 
                          ref={adminSigCanvas}
-                         penColor='black' 
+                         penColor='black'
+                         backgroundColor="white" 
                          canvasProps={{className: 'signature-canvas w-full h-40'}} 
                        />
                      </div>
