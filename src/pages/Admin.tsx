@@ -909,7 +909,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
            </div>
         </header>
 
-        <div className="flex-1 p-4 md:p-8 md:px-10 overflow-y-auto">
+        <div className="flex-1 p-3 md:p-5 lg:p-6 overflow-y-auto">
         {tab === 'tasks' && (
           <div className="space-y-8 max-w-4xl">
             <div>
@@ -917,30 +917,30 @@ const handleApproveCompletion = async (student: StudentProgress) => {
               <p className="text-[#a1a1a1] text-sm mt-1">Publish available schedule slots for students.</p>
             </div>
             
-            <form onSubmit={handleSubmit(onTaskSubmit)} className="bg-[#171717] border border-[#2e2e2e] p-6 rounded-lg grid grid-cols-1 md:grid-cols-4 gap-6">
+            <form onSubmit={handleSubmit(onTaskSubmit)} className="bg-[#171717] border border-[#2e2e2e] p-3 md:p-4 rounded-lg grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 text-xs">
               <div className="space-y-1 md:col-span-4">
-                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Activity / Task Title</label>
-                <input {...register('title', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none placeholder:text-[#a1a1a1]/50" placeholder="e.g. Stage Decorations" />
+                <label className="text-[10px] font-semibold uppercase text-[#a1a1a1]">Activity / Task Title</label>
+                <input {...register('title', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none placeholder:text-[#a1a1a1]/50" placeholder="e.g. Stage Decorations" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Date</label>
+                <label className="text-[10px] font-semibold uppercase text-[#a1a1a1]">Date</label>
                 <input 
                   type="date" 
                   min={getTodayYYYYMMDD()} 
                   {...register('date', { required: true })} 
-                  className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" 
+                  className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" 
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Start Time</label>
-                <input type="time" {...register('startTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
+                <label className="text-[10px] font-semibold uppercase text-[#a1a1a1]">Start In</label>
+                <input type="time" {...register('startTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">End Time</label>
-                <input type="time" {...register('endTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
+                <label className="text-[10px] font-semibold uppercase text-[#a1a1a1]">Finish By</label>
+                <input type="time" {...register('endTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-[#a1a1a1]">Faculty/Staff In-Charge</label>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold uppercase text-[#a1a1a1]">In-Charge</label>
                 <select 
                   value={staffOption}
                   onChange={(e) => {
@@ -952,29 +952,29 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       setValue('staffName', '');
                     }
                   }}
-                  className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none"
+                  className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none"
                 >
-                  <option value="me">Me ({members.find(m => m.id === user?.uid)?.displayName || user?.displayName || 'Admin'})</option>
-                  <option value="other">Specify Name...</option>
+                  <option value="me">Me</option>
+                  <option value="other">Specify...</option>
                 </select>
                 {staffOption === 'other' && (
                   <input 
                     {...register('staffName', { required: staffOption === 'other' })} 
-                    className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none placeholder:text-[#a1a1a1]/50" 
-                    placeholder="Enter staff name" 
+                    className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md mt-1 focus:ring-1 focus:ring-[#3ecf8e] outline-none" 
+                    placeholder="Staff name" 
                   />
                 )}
                 {staffOption === 'me' && (
                   <input type="hidden" {...register('staffName')} />
                 )}
               </div>
-              <div className="md:col-span-4 flex justify-end gap-3">
+              <div className="md:col-span-4 flex justify-end gap-2">
                 {editingTask && (
-                  <button type="button" onClick={() => { setEditingTask(null); reset(); }} className="px-4 py-2 text-sm font-bold border border-[#2e2e2e] rounded-md">Cancel</button>
+                  <button type="button" onClick={() => { setEditingTask(null); reset(); }} className="px-3 py-1.5 text-[10px] font-bold border border-[#2e2e2e] rounded-md uppercase">Cancel</button>
                 )}
-                <button disabled={submittingTask} className={`${editingTask ? 'bg-amber-500 hover:bg-amber-600 border-amber-500' : 'bg-[#3ecf8e] hover:bg-[#34b27b] border-[#3ecf8e]'} text-black text-sm font-bold px-4 py-2 rounded-md flex items-center gap-2 transition-colors disabled:opacity-50 border`}>
-                 {submittingTask ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : editingTask ? <Edit2 className="w-4 h-4 text-black" /> : <Plus className="w-4 h-4 text-black" /> }
-                 {editingTask ? 'Update Task' : 'Publish Task'}
+                <button disabled={submittingTask} className={`${editingTask ? 'bg-amber-500 border-amber-500' : 'bg-[#3ecf8e] border-[#3ecf8e]'} text-black text-[10px] font-bold uppercase tracking-tight px-4 py-1.5 rounded-md flex items-center gap-1.5 transition-colors disabled:opacity-50 border`}>
+                 {submittingTask ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : editingTask ? <Edit2 className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" /> }
+                 {editingTask ? 'Update' : 'Publish'}
                 </button>
               </div>
             </form>
@@ -999,46 +999,46 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                   <table className="min-w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
                       <tr>
-                        <th className="px-4 py-3">Task Title</th>
-                        <th className="px-4 py-3">Schedule</th>
-                        <th className="px-4 py-3">Duration</th>
-                        <th className="px-4 py-3 text-right">Actions</th>
+                        <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider">Task Title</th>
+                        <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider">Schedule</th>
+                        <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider">Duration</th>
+                        <th className="px-3 py-2 text-right text-[9px] font-bold uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#2e2e2e]">
                       {activeTasks.length === 0 ? (
-                        <tr><td colSpan={4} className="px-4 py-4 text-center text-[#a1a1a1]">No active tasks found matching your search.</td></tr>
+                        <tr><td colSpan={4} className="px-4 py-4 text-center text-[#a1a1a1]">No active tasks found.</td></tr>
                       ) : activeTasks.map(t => (
                         <tr key={t.id} className="hover:bg-[#1c1c1c]">
-                          <td className="px-4 py-3">
-                             <div className="font-medium text-[#ededed]">{t.title}</div>
-                             <div className="text-[10px] text-[#a1a1a1] uppercase font-bold">{t.staffName}</div>
+                          <td className="px-3 py-1.5">
+                             <div className="font-bold text-[#ededed] text-[11px]">{t.title}</div>
+                             <div className="text-[8px] text-[#a1a1a1] uppercase font-bold tracking-tight">{t.staffName}</div>
                           </td>
-                          <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
-                            <div className="text-[#ededed] mb-1">{formatDate(t.date)}</div>
+                          <td className="px-3 py-1.5 text-[#a1a1a1] font-mono text-[9px]">
+                            <div className="text-[#ededed] mb-0.5">{formatDate(t.date)}</div>
                             <div>{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
                           </td>
-                          <td className="px-4 py-3 text-[#3ecf8e] font-bold">{t.duration?.toFixed(1)} hrs</td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex justify-end gap-2">
+                          <td className="px-3 py-1.5 text-[#3ecf8e] font-bold text-[10px]">{t.duration?.toFixed(1)} hrs</td>
+                          <td className="px-3 py-1.5 text-right">
+                            <div className="flex justify-end gap-1.5">
                                {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
-                                 <div className="flex items-center gap-2">
+                                 <div className="flex items-center gap-1.5">
                                    {records.filter(r => r.taskTitle === t.title && r.date === t.date).every(r => r.status === 'verified') ? (
-                                      <span className="text-[9px] text-[#3ecf8e] uppercase font-black px-2 py-0.5 bg-[#3ecf8e]/10 border border-[#3ecf8e]/30 rounded tracking-widest shadow-[0_0_10px_rgba(62,207,142,0.1)]">Done</span>
+                                      <span className="text-[8px] text-[#3ecf8e] uppercase font-black px-1.5 py-0.5 bg-[#3ecf8e]/10 border border-[#3ecf8e]/30 rounded">Done</span>
                                    ) : (
-                                      <span className="text-[9px] text-[#a1a1a1] uppercase font-bold italic border border-[#2e2e2e] px-2 py-0.5 rounded">In Progress</span>
+                                      <span className="text-[8px] text-[#a1a1a1] uppercase font-bold italic border border-[#2e2e2e] px-1.5 py-0.5 rounded">Active</span>
                                    )}
                                    <button 
                                       onClick={() => { setTab('records'); setRecordsSearch(t.title); window.scrollTo({top:0, behavior: 'smooth'}); }} 
-                                      className="text-xs text-blue-400 font-bold hover:underline underline-offset-4 flex items-center gap-1 bg-blue-400/5 px-2 py-1 rounded border border-blue-400/20 transition-all hover:bg-blue-400/10"
+                                      className="text-[9px] text-blue-400 font-bold hover:underline bg-blue-400/5 px-2 py-1 rounded border border-blue-400/20"
                                    >
-                                      View Logs
+                                      Logs
                                    </button>
                                  </div>
                                ) : (
                                  <>
-                                   <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
-                                   <button onClick={() => handleDeleteTask(t.id)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Delete Task"><Trash2 className="w-4 h-4" /></button>
+                                   <button onClick={() => handleEditTask(t)} className="p-1 hover:bg-amber-500/10 text-amber-500 rounded"><Edit2 className="w-3 h-3" /></button>
+                                   <button onClick={() => handleDeleteTask(t.id)} className="p-1 hover:bg-red-500/10 text-red-500 rounded"><Trash2 className="w-3 h-3" /></button>
                                  </>
                                )}
                             </div>
@@ -1101,20 +1101,20 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         )}
 
         {tab === 'records' && (
-          <div className="space-y-8 max-w-6xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-4 max-w-6xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Service Logs</h2>
-              <p className="text-[#a1a1a1] text-sm mt-1 text-balance">Review and verify student obligations.</p>
+              <h2 className="text-lg md:text-xl font-bold tracking-tight">Service Logs</h2>
+              <p className="text-[#a1a1a1] text-[10px] mt-0.5">Review and verify student obligations.</p>
             </div>
             <div className="relative w-full md:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#a1a1a1]" />
               <input 
                 type="text" 
-                placeholder="Search student or task..." 
+                placeholder="Search students..." 
                 value={recordsSearch}
                 onChange={(e) => setRecordsSearch(e.target.value)}
-                className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+                className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-[10px] focus:border-[#3ecf8e] outline-none transition-colors border-white/5"
               />
             </div>
           </div>
@@ -1195,18 +1195,16 @@ const handleApproveCompletion = async (student: StudentProgress) => {
             <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
               {/* Desktop View */}
               <div className="hidden xl:block overflow-x-auto w-full">
-                <table className="min-w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
-                    <tr>
-                      <th className="px-4 py-3">Beneficiary</th>
-                      <th className="px-4 py-3">Program/Sec</th>
-                      <th className="px-4 py-3">Duty Task</th>
-                      <th className="px-4 py-3">Time Log</th>
-                      <th className="px-4 py-3 text-center">Hours</th>
-                      <th className="px-4 py-3 text-center">Status</th>
-                      <th className="px-4 py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
+                <table className="min-w-full text-left text-[11px] whitespace-nowrap">
+                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-[9px] font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-2">Beneficiary</th>
+                        <th className="px-3 py-2">Program/Sec</th>
+                        <th className="px-3 py-2 text-center">Hrs</th>
+                        <th className="px-3 py-2 text-center">Status</th>
+                        <th className="px-3 py-2 text-right">Action</th>
+                      </tr>
+                    </thead>
                   <tbody className="divide-y divide-[#2e2e2e]">
                     {filteredRecords.length === 0 ? (
                         <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No records found matching your search.</td></tr>
@@ -1382,26 +1380,26 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         )}
 
         {tab === 'progress' && (
-          <div className="space-y-6 max-w-6xl">
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-[#171717] p-6 rounded-xl border border-[#2e2e2e]">
-              <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-[#3ecf8e]/10 rounded-xl flex items-center justify-center text-[#3ecf8e] shrink-0 border border-[#3ecf8e]/20">
-                    <CheckCircle2 className="w-6 h-6" />
+          <div className="space-y-4 max-w-6xl">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-[#171717] p-3 rounded-xl border border-[#2e2e2e]">
+              <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 bg-[#3ecf8e]/10 rounded-xl flex items-center justify-center text-[#3ecf8e] shrink-0 border border-[#3ecf8e]/20">
+                    <CheckCircle2 className="w-5 h-5" />
                  </div>
                  <div>
-                    <h2 className="text-xl font-bold tracking-tight">Student Progress</h2>
-                    <p className="text-[#a1a1a1] text-xs font-medium">Goal: 20 verified hours for completion.</p>
+                    <h2 className="text-sm font-bold tracking-tight">Student Progress</h2>
+                    <p className="text-[#a1a1a1] text-[10px] font-medium">Goal: 20 verified hours.</p>
                  </div>
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#a1a1a1]" />
                   <input 
                     type="text" 
-                    placeholder="Search name, ID or email..." 
+                    placeholder="Search students..." 
                     value={progressSearch}
                     onChange={(e) => setProgressSearch(e.target.value)}
-                    className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-2 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+                    className="w-full bg-[#0a0a0a] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-[10px] focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -1437,9 +1435,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                         showAlert("Error", "Bulk approval failed.", "error");
                       }
                     }}
-                    className="bg-[#3ecf8e] text-black text-[10px] font-bold uppercase tracking-tight px-3 py-2.5 rounded-lg hover:bg-[#34b27b] transition-all flex items-center gap-2 shadow-lg"
+                    className="bg-[#3ecf8e] text-black text-[9px] font-bold uppercase tracking-tight px-3 py-2 rounded-lg hover:bg-[#34b27b] transition-all flex items-center gap-1.5 shadow-lg"
                   >
-                    <CheckSquare className="w-3.5 h-3.5" /> Approve Eligible
+                    <CheckSquare className="w-3 h-3" /> Approve
                   </button>
                   <button 
                     onClick={async () => {
@@ -1463,64 +1461,65 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       }
                       showAlert("Success", `Finished sending ${sentCount} emails.`, "success");
                     }}
-                    className="bg-blue-500 text-white text-[10px] font-bold uppercase tracking-tight px-3 py-2.5 rounded-lg hover:bg-blue-600 transition-all flex items-center gap-2 shadow-lg"
+                    className="bg-blue-500 text-white text-[9px] font-bold uppercase tracking-tight px-3 py-2 rounded-lg hover:bg-blue-600 transition-all flex items-center gap-1.5 shadow-lg"
                   >
-                    <Mail className="w-3.5 h-3.5" /> Send Emails
+                    <Mail className="w-3 h-3" /> Emails
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-               <div className="bg-[#171717] border border-[#2e2e2e] p-4 rounded-lg">
-                  <div className="text-[10px] text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Total Students</div>
-                  <div className="text-2xl font-bold">{studentProgressRaw.length}</div>
+            <div className="grid grid-cols-3 gap-2">
+               <div className="bg-[#171717] border border-[#2e2e2e] p-2 rounded-lg flex flex-col items-center">
+                  <div className="text-[8px] text-[#a1a1a1] uppercase font-bold tracking-tight mb-0.5">Total</div>
+                  <div className="text-sm font-bold">{studentProgressRaw.length}</div>
                </div>
-               <div className="bg-[#171717] border border-[#2e2e2e] p-4 rounded-lg">
-                  <div className="text-[10px] text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Completed</div>
-                  <div className="text-2xl font-bold text-[#3ecf8e]">{studentProgressRaw.filter(s => s.verifiedHours >= 20).length}</div>
+               <div className="bg-[#171717] border border-[#2e2e2e] p-2 rounded-lg flex flex-col items-center">
+                  <div className="text-[8px] text-[#a1a1a1] uppercase font-bold tracking-tight mb-0.5">Done</div>
+                  <div className="text-sm font-bold text-[#3ecf8e]">{studentProgressRaw.filter(s => s.verifiedHours >= 20).length}</div>
                </div>
-               <div className="bg-[#171717] border border-[#2e2e2e] p-4 rounded-lg">
-                  <div className="text-[10px] text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">In Progress</div>
-                  <div className="text-2xl font-bold text-amber-500">{studentProgressRaw.filter(s => s.verifiedHours < 20).length}</div>
+               <div className="bg-[#171717] border border-[#2e2e2e] p-2 rounded-lg flex flex-col items-center">
+                  <div className="text-[8px] text-[#a1a1a1] uppercase font-bold tracking-tight mb-0.5">Progress</div>
+                  <div className="text-sm font-bold text-amber-500">{studentProgressRaw.filter(s => s.verifiedHours < 20).length}</div>
                </div>
             </div>
 
             <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto">
               <table className="min-w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-[10px] font-bold uppercase tracking-wider">
+                <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-[9px] font-bold uppercase tracking-wider">
                   <tr>
-                    <th className="px-4 py-3">Student</th>
-                    <th className="px-4 py-3 text-center">Program/Sec</th>
-                    <th className="px-4 py-3 text-center">Hours</th>
-                    <th className="px-4 py-3 text-center w-40">Progress</th>
-                    <th className="px-4 py-3 text-right">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-3 py-2">Student</th>
+                    <th className="px-3 py-2 text-center hidden md:table-cell">Program/Sec</th>
+                    <th className="px-3 py-2 text-center">Hours</th>
+                    <th className="px-3 py-2 text-center w-24 md:w-40">Progress</th>
+                    <th className="px-3 py-2 text-right hidden sm:table-cell">Status</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2e2e2e]">
                   {studentProgress.length === 0 ? (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-[#a1a1a1]">No student data available.</td></tr>
+                    <tr><td colSpan={6} className="px-6 py-6 text-center text-[#a1a1a1]">No student data available.</td></tr>
                   ) : studentProgress.map(s => (
                     <tr key={s.studentNo} className="hover:bg-[#1c1c1c]">
-                      <td className="px-4 py-2">
-                         <div className="flex items-center gap-2">
-                           <div className="font-bold text-[#ededed] text-xs leading-none">{s.studentName}</div>
-                           {s.hasNameMismatch && (
-                             <AlertCircle className="w-3 h-3 text-amber-500" />
-                           )}
+                      <td className="px-3 py-1.5">
+                         <div className="flex items-center gap-1.5">
+                           <div className="font-bold text-[#ededed] text-[11px] leading-tight flex items-center gap-1">
+                             {s.studentName}
+                             {s.hasNameMismatch && <AlertCircle className="w-2.5 h-2.5 text-amber-500" />}
+                           </div>
                          </div>
-                         <div className="text-[9px] text-[#3ecf8e] font-mono leading-none mt-0.5">{s.studentNo}</div>
+                         <div className="text-[8px] text-[#3ecf8e] font-mono leading-tight mt-0.5">{s.studentNo}</div>
                       </td>
-                      <td className="px-4 py-2 text-center text-[10px] text-[#a1a1a1]">
+                      <td className="px-3 py-1.5 text-center text-[9px] text-[#a1a1a1] hidden md:table-cell">
                         {s.program}/{s.section}
                       </td>
-                      <td className="px-4 py-2 text-center">
-                         <div className="font-bold text-[#ededed] text-xs">
-                          {s.verifiedHours.toFixed(1)}h <span className="text-[#666] font-normal italic">/ {s.totalHours.toFixed(1)}h</span>
+                      <td className="px-3 py-1.5 text-center">
+                         <div className="font-bold text-[#ededed] text-[10px]">
+                          {s.verifiedHours.toFixed(1)}h
                         </div>
+                        <div className="text-[8px] text-[#666] italic leading-tight">of {s.totalHours.toFixed(1)}h</div>
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-1.5">
                         <div className="flex items-center gap-2">
                           <div className="h-1 bg-[#262626] flex-1 rounded-full overflow-hidden border border-white/5">
                             <div 
@@ -1528,63 +1527,63 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                 style={{ width: `${Math.min(100, (s.verifiedHours / 20) * 100)}%` }}
                              />
                           </div>
-                          <span className="text-[9px] text-[#a1a1a1] w-6 text-right font-mono">{Math.round(Math.min(100, (s.verifiedHours / 20) * 100))}%</span>
+                          <span className="text-[8px] text-[#a1a1a1] w-4 text-right font-mono">{Math.round(Math.min(100, (s.verifiedHours / 20) * 100))}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-3 py-1.5 text-right hidden sm:table-cell">
                         {s.verifiedHours >= 20 ? (
-                           <span className="text-[#3ecf8e] text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#3ecf8e]/5 rounded inline-flex items-center gap-1 border border-[#3ecf8e]/20">
-                             <CheckSquare className="w-3 h-3" /> Done
+                           <span className="text-[#3ecf8e] text-[8px] font-bold uppercase tracking-tight px-1.5 py-0.5 bg-[#3ecf8e]/5 rounded inline-flex items-center gap-1 border border-[#3ecf8e]/20">
+                             Done
                            </span>
                         ) : (
-                           <span className="text-[#a1a1a1] text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#262626] rounded border border-white/5">
+                           <span className="text-[#a1a1a1] text-[8px] font-bold uppercase tracking-tight px-1.5 py-0.5 bg-[#262626] rounded border border-white/5">
                              Active
                            </span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-3 py-1.5 text-right">
                         {s.approval ? (
-                           <div className="flex flex-col items-end gap-2">
-                             <span className="text-[#3ecf8e] text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 bg-[#3ecf8e]/10 rounded flex items-center gap-1">
-                               <CheckCircle2 className="w-3 h-3" /> Fully Approved
-                             </span>
+                           <div className="flex flex-col items-end gap-1">
+                             <div className="flex items-center gap-1 text-[#3ecf8e] text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 bg-[#3ecf8e]/10 rounded">
+                               <CheckCircle2 className="w-2.5 h-2.5" /> Approved
+                             </div>
                              
-                             <div className="flex items-center gap-1 bg-[#262626] p-1 rounded-lg border border-[#2e2e2e]">
+                             <div className="flex items-center gap-0.5 bg-[#262626] p-0.5 rounded-lg border border-[#2e2e2e]">
                                <button
                                  onClick={() => handlePreviewPDF(s)}
-                                 className="text-blue-400 hover:text-blue-300 transition-colors p-1.5 rounded hover:bg-blue-400/10 flex items-center justify-center"
+                                 className="text-blue-400 hover:text-blue-300 transition-colors p-1 rounded hover:bg-blue-400/10 flex items-center justify-center"
                                  title="Preview & Print PDF"
                                >
-                                 <Printer className="h-4 w-4" />
+                                 <Printer className="h-3.5 w-3.5" />
                                </button>
-                               <div className="w-px h-4 bg-[#3e3e3e]"></div>
+                               <div className="w-px h-3 bg-[#3e3e3e]"></div>
                                <button
                                  onClick={() => sendCompletionEmail(s)}
-                                 className="text-emerald-400 hover:text-emerald-300 transition-colors p-1.5 rounded hover:bg-emerald-400/10 flex items-center justify-center"
+                                 className="text-emerald-400 hover:text-emerald-300 transition-colors p-1 rounded hover:bg-emerald-400/10 flex items-center justify-center"
                                  title="Resend Email to Student"
                                >
-                                 <Mail className="h-4 w-4" />
+                                 <Mail className="h-3.5 w-3.5" />
                                </button>
-                               <div className="w-px h-4 bg-[#3e3e3e]"></div>
+                               <div className="w-px h-3 bg-[#3e3e3e]"></div>
                                <button
                                  onClick={() => handleUndoApproval(s.approval!.id, s.studentName)}
-                                 className="text-red-400 hover:text-red-300 transition-colors p-1.5 rounded hover:bg-red-400/10 flex items-center justify-center"
+                                 className="text-red-400 hover:text-red-300 transition-colors p-1 rounded hover:bg-red-400/10 flex items-center justify-center"
                                  title="Undo Approval"
                                >
-                                 <RotateCcw className="h-4 w-4" />
+                                 <RotateCcw className="h-3.5 w-3.5" />
                                </button>
                              </div>
                            </div>
                         ) : s.verifiedHours >= 20 ? (
                            <button
                              onClick={() => handleApproveCompletion(s)}
-                             className="bg-amber-500 hover:bg-amber-600 text-black px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-colors flex items-center gap-2 ml-auto shadow-lg shadow-amber-500/10"
+                             className="bg-amber-500 hover:bg-amber-600 text-black px-2 py-1 rounded-md text-[9px] font-bold uppercase transition-colors flex items-center gap-1.5 ml-auto shadow-lg shadow-amber-500/10"
                            >
-                             <CheckCircle2 className="h-3.5 w-3.5" />
-                             Approve Completion
+                             <CheckCircle2 className="h-3 w-3" />
+                             Approve
                            </button>
                         ) : (
-                          <span className="text-[#a1a1a1] text-[9px] font-medium italic">Requirement not met</span>
+                          <span className="text-[#a1a1a1] text-[8px] font-medium italic">Requirement not met</span>
                         )}
                       </td>
                     </tr>
@@ -1596,57 +1595,56 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         )}
 
         {tab === 'history' && (
-          <div className="space-y-8 max-w-6xl">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-4 max-w-6xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">Task Execution History</h2>
-                <p className="text-[#a1a1a1] text-sm mt-1">Review completed tasks and corresponding student logs.</p>
+                <h2 className="text-lg md:text-xl font-bold tracking-tight">Execution History</h2>
+                <p className="text-[#a1a1a1] text-[10px] mt-0.5">Review completed tasks and corresponding student logs.</p>
               </div>
               <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#a1a1a1]" />
                 <input 
                   type="text" 
                   placeholder="Search history..." 
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}
-                  className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+                  className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-[10px] focus:border-[#3ecf8e] outline-none transition-colors border-white/5"
                 />
               </div>
             </div>
             
             <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
-               {/* Desktop View */}
                <div className="hidden lg:block overflow-x-auto w-full">
                  <table className="min-w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-[9px] font-bold uppercase tracking-wider">
                       <tr>
-                         <th className="px-6 py-4">Task Details</th>
-                         <th className="px-6 py-4">In-Charge</th>
-                         <th className="px-6 py-4 text-center">Duration</th>
-                         <th className="px-6 py-4">Executors / Students</th>
-                         <th className="px-6 py-4 text-right">Actions</th>
+                         <th className="px-4 py-2">Task Details</th>
+                         <th className="px-4 py-2">In-Charge</th>
+                         <th className="px-4 py-2 text-center">Dur</th>
+                         <th className="px-4 py-2">Students</th>
+                         <th className="px-4 py-2 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#2e2e2e]">
                       {historyTasks.length === 0 ? (
-                        <tr><td colSpan={5} className="px-6 py-10 text-center text-[#a1a1a1]">No task history found.</td></tr>
+                        <tr><td colSpan={5} className="px-6 py-6 text-center text-[#a1a1a1]">No records.</td></tr>
                       ) : historyTasks.map(t => {
                         const executors = records.filter(r => r.taskTitle === t.title && r.date === t.date);
                         return (
                           <tr key={t.id} className="hover:bg-[#1c1c1c]">
-                             <td className="px-6 py-4">
-                                <div className="font-bold text-[#ededed]">{t.title}</div>
-                                <div className="text-[10px] text-[#a1a1a1] uppercase font-mono">{formatDate(t.date)}</div>
+                             <td className="px-4 py-2">
+                                <div className="font-bold text-[#ededed] text-[11px]">{t.title}</div>
+                                <div className="text-[8px] text-[#a1a1a1] uppercase font-mono">{formatDate(t.date)}</div>
                              </td>
-                             <td className="px-6 py-4">
-                                <div className="text-xs text-[#ededed]">{t.staffName}</div>
-                                <div className="text-[10px] text-[#a1a1a1]">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                             <td className="px-4 py-2">
+                                <div className="text-[10px] text-[#ededed]">{t.staffName}</div>
+                                <div className="text-[8px] text-[#a1a1a1]">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
                              </td>
-                             <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">
+                             <td className="px-4 py-2 text-center font-bold text-[#3ecf8e] text-[10px]">
                                 {t.duration?.toFixed(1)}h
                              </td>
-                             <td className="px-6 py-4">
-                                <div className="flex -space-x-2">
+                             <td className="px-4 py-2">
+                                <div className="flex -space-x-1.5">
                                    {executors.slice(0, 4).map((ex, i) => (
                                       <div key={i} className="w-7 h-7 rounded-full border border-[#171717] bg-[#2e2e2e] flex items-center justify-center text-[10px] font-bold" title={ex.studentName}>
                                          {ex.studentName.charAt(0)}
@@ -1738,20 +1736,20 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         )}
 
         {tab === 'members' && (
-          <div className="space-y-8 max-w-6xl">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-4 max-w-6xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">System Members & Settings</h2>
-                <p className="text-[#a1a1a1] text-sm mt-1">Directory of Registered OSA Admins and Staff Members, and System Registration Control.</p>
+                <h2 className="text-lg md:text-xl font-bold tracking-tight">Staff Directory</h2>
+                <p className="text-[#a1a1a1] text-[10px] mt-0.5">Manage OSA Admins, Staff Members and Registration.</p>
               </div>
               <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#a1a1a1]" />
                 <input 
                   type="text" 
-                  placeholder="Search staff members..." 
+                  placeholder="Search staff..." 
                   value={membersSearch}
                   onChange={(e) => setMembersSearch(e.target.value)}
-                  className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+                  className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-[10px] focus:border-[#3ecf8e] outline-none transition-colors border-white/5"
                 />
               </div>
             </div>
