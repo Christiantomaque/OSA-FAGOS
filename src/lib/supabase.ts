@@ -71,7 +71,6 @@ export const getDocs = async (q: any) => {
     const { data, error } = await req;
     
     if (error) {
-        // Handle missing tables or schema cache issues gracefully
         if (error.code === '42P01' || error.message?.includes('schema cache')) {
             console.warn(`Table "${q.path}" not found. Please create it in Supabase SQL Editor.`);
             return { docs: [], forEach: (cb: any) => {} };

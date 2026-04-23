@@ -53,8 +53,6 @@ export default function Portal() {
   const [claimedTaskIds, setClaimedTaskIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
-  const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const sigPad = useRef<SignatureCanvas>(null);
@@ -63,7 +61,7 @@ export default function Portal() {
   const currentYear = new Date().getFullYear();
   const academicYear = `${currentYear} - ${currentYear + 1}`;
 
-  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, watch, reset, setValue } = useForm<FormData>({
     defaultValues: {
       semester: '1st Semester'
     }
@@ -73,7 +71,7 @@ export default function Portal() {
 
   // --- Real-Time Data Sync ---
   useEffect(() => {
-    // 1. Real-time listener for Tasks (Added explicit :any types to fix TS errors)
+    // 1. Real-time listener for Tasks (Using :any to clear TS errors)
     const unsubTasks = onSnapshot(
       query(collection(db, 'tasks'), orderBy('date', 'desc')), 
       (snapshot: any) => {
@@ -118,22 +116,10 @@ export default function Portal() {
 
   const selectedTask = tasks.find(t => t.id === watchTaskId);
 
-  // --- Completion Check (Optional UI trigger) ---
-  const checkCompletion = async (studentNo: string) => {
-    try {
-      // In a real Supabase setup, you'd fetch this from the 'service_records' table
-      // Simplified for this shim logic
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   // --- Submission Logic ---
   const onSubmit = async (data: FormData) => {
     if (!selectedTask) return;
     setSubmitting(true);
-    setSuccessMsg("");
-    setShowCompletionMessage(false);
 
     try {
       if (sigPad.current?.isEmpty()) {
@@ -142,7 +128,7 @@ export default function Portal() {
         return;
       }
 
-      // Final check to see if the task was taken while the student was typing
+      // Final race-condition check
       if (claimedTaskIds.has(selectedTask.id)) {
         showAlert("Task Unavailable", "This task was just claimed by another student. Please select another one.", "error");
         setValue("taskId", "");
@@ -178,10 +164,9 @@ export default function Portal() {
         createdAt: serverTimestamp()
       });
 
-      showAlert("Success", "Service obligation successfully recorded! Wait for OSA verification.", "success");
+      showAlert("Success", "Service obligation successfully recorded!", "success");
       sigPad.current?.clear();
       reset();
-      checkCompletion(data.studentNo);
     } catch (err: any) {
       console.error("Submission error:", err);
       showAlert("Submission Failed", `Error: ${err.message || "Please check your connection."}`, "error");
@@ -214,32 +199,32 @@ export default function Portal() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Full Name</label>
-                <input {...register("studentName", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none transition-all" placeholder="Last Name, First Name M.I." />
+                <input {...register("studentName", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="Last Name, First Name M.I." />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Student No.</label>
-                <input {...register("studentNo", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none transition-all" placeholder="e.g. 20210001" />
+                <input {...register("studentNo", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. 20210001" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Email Address</label>
-                <input type="email" {...register("studentEmail", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none transition-all" placeholder="name@example.com" />
+                <input type="email" {...register("studentEmail", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="name@example.com" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Program</label>
-                <input {...register("program", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none transition-all" placeholder="e.g. BSIT" />
+                <input {...register("program", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. BSIT" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Section</label>
-                <input {...register("section", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none transition-all" placeholder="e.g. 1E4" />
+                <input {...register("section", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. 1E4" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Scholarship Bracket</label>
-                <input {...register("bracket", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none transition-all" placeholder="e.g. BRACKET A" />
+                <input {...register("bracket", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. BRACKET A" />
               </div>
             </div>
           </div>
 
-          {/* Service Selection */}
+          {/* Task Dropdown Selection */}
           <div className="pt-2">
             <h4 className="text-sm font-semibold text-[#ededed] uppercase tracking-wider mb-4 border-b border-[#2e2e2e] pb-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#3ecf8e]" />
@@ -259,7 +244,7 @@ export default function Portal() {
                       type="button"
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                       disabled={loading}
-                      className="w-full text-left text-sm bg-[#0a0a0a] border border-[#2e2e2e] text-[#ededed] pl-4 pr-10 py-3.5 rounded-md focus:border-[#3ecf8e] outline-none flex items-center justify-between hover:border-[#3e3e3e] transition-all"
+                      className="w-full text-left text-sm bg-[#0a0a0a] border border-[#2e2e2e] text-[#ededed] pl-4 pr-10 py-3.5 rounded-md focus:border-[#3ecf8e] outline-none flex items-center justify-between hover:border-[#3e3e3e]"
                     >
                       <span className={!field.value ? 'text-[#a1a1a1]/40' : ''}>
                         {field.value 
@@ -282,7 +267,7 @@ export default function Portal() {
                           >
                             {activeTasks.length === 0 ? (
                               <div className="p-10 text-center text-xs text-[#a1a1a1] italic">
-                                No tasks available for today. All have been claimed or expired.
+                                No tasks available for today.
                               </div>
                             ) : (
                               activeTasks.map((t) => (
@@ -290,7 +275,7 @@ export default function Portal() {
                                   key={t.id}
                                   type="button"
                                   onClick={() => { field.onChange(t.id); setIsDropdownOpen(false); }}
-                                  className="w-full text-left p-4 hover:bg-[#3ecf8e]/10 border-b border-[#2e2e2e] last:border-0 transition-colors group"
+                                  className="w-full text-left p-4 hover:bg-[#3ecf8e]/10 border-b border-[#2e2e2e] last:border-0 group"
                                 >
                                   <div className="flex justify-between items-start mb-1">
                                     <span className="font-bold text-[#ededed] group-hover:text-[#3ecf8e]">{t.title}</span>
@@ -319,9 +304,9 @@ export default function Portal() {
                   <div><div className="text-[9px] uppercase font-bold text-[#a1a1a1] mb-1">Time Out</div><div className="text-sm font-mono">{formatTime(selectedTask.endTime)}</div></div>
                   <div><div className="text-[9px] uppercase font-bold text-[#a1a1a1] mb-1">Duration</div><div className="text-sm font-bold text-[#3ecf8e]">{selectedTask.duration.toFixed(1)} hrs</div></div>
                 </div>
-                <div className="pt-2 border-t border-[#2e2e2e] flex justify-between items-center">
+                <div className="pt-2 border-t border-[#2e2e2e] flex justify-between items-center text-sm">
                    <div className="text-[9px] uppercase font-bold text-[#a1a1a1]">Authorized Staff</div>
-                   <div className="text-sm font-medium">{selectedTask.staffName}</div>
+                   <div className="font-medium">{selectedTask.staffName}</div>
                 </div>
               </motion.div>
             )}
@@ -345,7 +330,6 @@ export default function Portal() {
                 canvasProps={{ className: 'w-full h-full cursor-crosshair' }} 
               />
             </div>
-            <p className="text-[9px] text-[#a1a1a1] mt-2 italic">* Draw your signature clearly in the box above.</p>
           </div>
 
           <div className="pt-6 border-t border-[#2e2e2e] flex items-center justify-between">
