@@ -344,9 +344,10 @@ export default function Admin() {
 
       if (isNaN(durationHours) || durationHours < 0) durationHours = 0;
 
-      // Set staffName if 'me' option is active but field might be empty due to reset
-      if (staffOption === 'me' && !data.staffName) {
-        data.staffName = user?.displayName || user?.email || '';
+      // Set staffName if 'me' option is active
+      if (staffOption === 'me') {
+        const currentMember = members.find(m => m.id === user?.uid);
+        data.staffName = currentMember?.displayName || user?.displayName || user?.email || '';
       }
 
       const taskPayload = {
@@ -392,7 +393,7 @@ export default function Admin() {
     setValue('staffName', task.staffName);
     
     // Set dropdown option based on if it matches current user
-    const currentUserName = user?.displayName || user?.email || '';
+    const currentUserName = members.find(m => m.id === user?.uid)?.displayName || user?.displayName || user?.email || '';
     if (task.staffName === currentUserName) {
       setStaffOption('me');
     } else {
@@ -1571,14 +1572,14 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                 <Settings className="w-5 h-5 text-[#3ecf8e]" />
                 System Settings
               </h3>
-              <div className="bg-[#171717] rounded-lg p-4 border border-[#2e2e2e] flex items-center justify-between">
-                <div>
-                  <h4 className="text-[#ededed] font-medium tracking-tight text-sm">System Registration</h4>
+              <div className="bg-[#171717] rounded-lg p-4 border border-[#2e2e2e] flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h4 className="text-[#ededed] font-medium tracking-tight text-sm truncate">System Registration</h4>
                   <p className="text-xs text-[#a1a1a1]">Control whether new users can sign up for an account via the login screen.</p>
                 </div>
                 <button
                   onClick={handleToggleSignups}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${allowSignups ? 'bg-[#3ecf8e]' : 'bg-[#2e2e2e]'}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${allowSignups ? 'bg-[#3ecf8e]' : 'bg-[#2e2e2e]'}`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowSignups ? 'translate-x-6' : 'translate-x-1'}`}

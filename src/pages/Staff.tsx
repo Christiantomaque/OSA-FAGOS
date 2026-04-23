@@ -254,8 +254,9 @@ export default function Staff() {
       if (durationHours < 0) durationHours += 24;
 
       // Set staffName if 'me' option is active
-      if (staffOption === 'me' && !data.staffName) {
-        data.staffName = user?.displayName || user?.email || '';
+      if (staffOption === 'me') {
+        const currentMember = members.find(m => m.id === user?.uid);
+        data.staffName = currentMember?.displayName || user?.displayName || user?.email || '';
       }
 
       const taskData = {
@@ -298,7 +299,7 @@ export default function Staff() {
     setValue('staffName', task.staffName);
 
     // Set dropdown option based on if it matches current user
-    const currentUserName = user?.displayName || user?.email || '';
+    const currentUserName = members.find(m => m.id === user?.uid)?.displayName || user?.displayName || user?.email || '';
     if (task.staffName === currentUserName) {
       setStaffOption('me');
     } else {
