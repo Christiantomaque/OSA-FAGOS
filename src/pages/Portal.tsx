@@ -116,7 +116,6 @@ export default function Portal() {
     const isFutureDate = t.date > today;
     const isTodayAndNotExpired = t.date === today && t.endTime > currentTime;
 
-    // Only show tasks that are not picked and haven't expired
     return !isAlreadyPicked && (isFutureDate || isTodayAndNotExpired);
   });
 
@@ -134,7 +133,6 @@ export default function Portal() {
         return;
       }
 
-      // Final race-condition check
       if (claimedTaskIds.has(selectedTask.id)) {
         showAlert("Task Unavailable", "This task was just claimed by another student. Please select another one.", "error");
         setValue("taskId", "");
@@ -188,17 +186,32 @@ export default function Portal() {
         {/* --- HEADER SECTION --- */}
         <div className="border-b border-[#2e2e2e] bg-[#1c1c1c] p-6 sm:p-10">
           <div className="flex items-center justify-between gap-2 sm:gap-4 max-w-2xl mx-auto">
-            <img src={cdmLogo} alt="CDM Logo" className="w-12 h-12 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md" />
             
+            {/* Left Logo (CDM) */}
+            <img 
+              src={cdmLogo} 
+              alt="CDM Logo" 
+              className="w-12 h-12 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md" 
+            />
+            
+            {/* Center Text */}
             <div className="text-center flex-1">
               <h1 className="text-base sm:text-2xl font-bold tracking-tight text-[#ededed] uppercase leading-tight">Colegio de Muntinlupa</h1>
               <p className="text-[9px] sm:text-xs font-medium tracking-wide text-[#a1a1a1] mt-1 uppercase">The Home of Future Engineers and Architects</p>
+              
               <div className="my-3 sm:my-4 h-px w-16 bg-[#3ecf8e] mx-auto rounded-full"></div>
+              
               <h2 className="text-xs sm:text-md text-[#3ecf8e] font-semibold uppercase">Office of Student Affairs</h2>
               <h3 className="text-sm sm:text-lg font-bold text-[#ededed] mt-1 sm:mt-2">SERVICE OBLIGATION COMPLETION FORM</h3>
             </div>
 
-            <img src={osaLogo} alt="OSA Logo" className="w-12 h-12 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md" />
+            {/* Right Logo (OSA) - Scaled up to remove transparent padding effect */}
+            <img 
+              src={osaLogo} 
+              alt="OSA Logo" 
+              className="w-12 h-12 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md scale-150" 
+            />
+
           </div>
         </div>
 
