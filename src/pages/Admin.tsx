@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, getDocs, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, deleteDoc, setDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout } from '../lib/supabase';
 import { useForm } from 'react-hook-form';
-import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X } from 'lucide-react';
+import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X, CheckSquare } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { generateObligationPDF } from '../utils/pdfGenerator';
 import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
@@ -95,6 +95,7 @@ export default function Admin() {
   const [taskSearch, setTaskSearch] = useState('');
   const [editingRecord, setEditingRecord] = useState<ServiceRecord | null>(null);
   const [staffOption, setStaffOption] = useState<'me' | 'other'>('me');
+  const [searchTerm, setSearchTerm] = useState('');
   const [savingSignature, setSavingSignature] = useState(false);
   const adminSigCanvas = useRef<SignatureCanvas>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -702,7 +703,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     return currentTimeStr >= task.startTime && currentTimeStr <= task.endTime;
   };
 
-  const studentProgress = Object.values(
+  const studentProgressRaw = Object.values(
     // Sort by date to ensure we can identify the "latest" name
     [...records].sort((a, b) => {
       const dateA = a.date + ' ' + (a.timeIn || '00:00');
@@ -745,8 +746,21 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     }, {})
   ).sort((a, b) => (b as StudentProgress).verifiedHours - (a as StudentProgress).verifiedHours) as StudentProgress[];
 
-  const activeTasks = tasks.filter(t => t.date >= getTodayYYYYMMDD() && t.title.toLowerCase().includes(taskSearch.toLowerCase()));
-  const historyTasks = tasks.filter(t => t.date < getTodayYYYYMMDD());
+  const studentProgress = studentProgressRaw.filter(s => 
+    s.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.studentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.studentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.program.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredRecords = records.filter(r => 
+    r.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.studentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.taskTitle.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const activeTasks = tasks.filter(t => t.date >= getTodayYYYYMMDD() && (t.title.toLowerCase().includes(taskSearch.toLowerCase()) || t.title.toLowerCase().includes(searchTerm.toLowerCase())));
+  const historyTasks = tasks.filter(t => t.date < getTodayYYYYMMDD() && (t.title.toLowerCase().includes(searchTerm.toLowerCase())));
 
   if (loadingAuth) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
 
@@ -852,9 +866,44 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 p-6 md:p-8 md:px-10 overflow-y-auto bg-[#1c1c1c] text-[#ededed]">
-        
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 bg-[#1c1c1c]">
+        <header className="sticky top-0 z-30 bg-[#171717] border-b border-[#2e2e2e] p-4 md:px-8 md:py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+           <div className="flex items-center gap-3">
+              <div className="md:hidden w-8 h-8 bg-[#3ecf8e] rounded flex items-center justify-center">
+                 <LayoutDashboard className="w-5 h-5 text-black" />
+              </div>
+              <h1 className="text-lg md:text-xl font-bold tracking-tight text-[#ededed]">
+                {tab === 'tasks' && 'Schedule Management'}
+                {tab === 'records' && 'Service Records'}
+                {tab === 'progress' && 'Performance Tracker'}
+                {tab === 'history' && 'Task Archive'}
+                {tab === 'members' && 'Staff Directory'}
+                {tab === 'settings' && 'System Preferences'}
+              </h1>
+           </div>
+           
+           <div className="flex items-center gap-3">
+              {(tab !== 'settings' && tab !== 'members') && (
+                <div className="relative group">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1] transition-colors group-focus-within:text-[#3ecf8e]" />
+                  <input 
+                    type="text" 
+                    placeholder="Search..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-[#1c1c1c] border border-[#2e2e2e] text-xs rounded-full py-2 pl-10 pr-4 w-full md:w-64 focus:outline-none focus:ring-1 focus:ring-[#3ecf8e] transition-all placeholder:text-[#a1a1a1]/30"
+                  />
+                </div>
+              )}
+              <div className="hidden md:flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1] bg-[#1c1c1c] px-3 py-1.5 rounded-full border border-[#2e2e2e]">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" />
+                Live
+              </div>
+           </div>
+        </header>
+
+        <div className="flex-1 p-4 md:p-8 md:px-10 overflow-y-auto">
         {tab === 'tasks' && (
           <div className="space-y-8 max-w-4xl">
             <div>
@@ -967,7 +1016,19 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-2">
                                {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
-                                 <span className="text-[10px] text-[#555] uppercase font-bold italic pr-2">Task Locked (In Progress)</span>
+                                 <div className="flex items-center gap-2">
+                                   {records.filter(r => r.taskTitle === t.title && r.date === t.date).every(r => r.status === 'verified') ? (
+                                      <span className="text-[9px] text-[#3ecf8e] uppercase font-black px-2 py-0.5 bg-[#3ecf8e]/10 border border-[#3ecf8e]/30 rounded tracking-widest shadow-[0_0_10px_rgba(62,207,142,0.1)]">Done</span>
+                                   ) : (
+                                      <span className="text-[9px] text-[#a1a1a1] uppercase font-bold italic border border-[#2e2e2e] px-2 py-0.5 rounded">In Progress</span>
+                                   )}
+                                   <button 
+                                      onClick={() => { setTab('records'); setSearchTerm(t.title); window.scrollTo({top:0, behavior: 'smooth'}); }} 
+                                      className="text-xs text-blue-400 font-bold hover:underline underline-offset-4 flex items-center gap-1 bg-blue-400/5 px-2 py-1 rounded border border-blue-400/20 transition-all hover:bg-blue-400/10"
+                                   >
+                                      View Logs
+                                   </button>
+                                 </div>
                                ) : (
                                  <>
                                    <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
@@ -990,22 +1051,34 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                     <div key={t.id} className="p-4 space-y-3 hover:bg-[#1c1c1c] transition-colors">
                       <div className="flex justify-between items-start gap-4">
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-[#ededed] break-words">{t.title}</div>
+                          <div className="font-bold text-[#ededed] break-words text-sm">{t.title}</div>
                           <div className="text-[10px] text-[#a1a1a1] uppercase font-bold mt-0.5">{t.staffName}</div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="text-[#3ecf8e] font-bold text-sm bg-[#3ecf8e]/10 px-2 py-0.5 rounded">{t.duration?.toFixed(1)}h</div>
+                          <div className="text-[#3ecf8e] font-bold text-xs bg-[#3ecf8e]/10 px-2 py-0.5 rounded">{t.duration?.toFixed(1)}h</div>
                         </div>
                       </div>
                       
                       <div className="bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
-                        <div className="text-[#ededed] text-xs font-mono mb-1">{formatDate(t.date)}</div>
-                        <div className="text-[#a1a1a1] text-xs font-mono">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                        <div className="text-[#ededed] text-[10px] font-mono mb-1">{formatDate(t.date)}</div>
+                        <div className="text-[#a1a1a1] text-[10px] font-mono">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
                       </div>
                       
                       <div className="flex justify-end pt-2 border-t border-[#2e2e2e]/50">
                         {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
-                          <span className="text-[10px] text-[#555] uppercase font-bold italic">Task Locked (In Progress)</span>
+                          <div className="flex items-center gap-2">
+                             {records.filter(r => r.taskTitle === t.title && r.date === t.date).every(r => r.status === 'verified') ? (
+                                <span className="text-[10px] text-[#3ecf8e] font-bold uppercase tracking-widest px-2 py-0.5 bg-[#3ecf8e]/5 border border-[#3ecf8e]/20 rounded">Done</span>
+                             ) : (
+                                <span className="text-[10px] text-[#a1a1a1] uppercase font-bold italic px-2 py-0.5 bg-[#262626] rounded border border-white/5">In Progress</span>
+                             )}
+                             <button 
+                               onClick={() => { setTab('records'); setSearchTerm(t.title); window.scrollTo({top:0, behavior: 'smooth'}); }}
+                               className="text-[10px] text-blue-400 font-bold uppercase hover:underline border border-blue-400/20 px-2 py-0.5 rounded bg-blue-400/5 transition-all"
+                             >
+                               View Logs
+                             </button>
+                          </div>
                         ) : (
                           <div className="flex gap-2">
                             <button onClick={() => handleEditTask(t)} className="px-3 py-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors text-xs flex items-center gap-1 font-medium"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
@@ -1117,9 +1190,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#2e2e2e]">
-                    {records.length === 0 ? (
-                        <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No service logs submitted yet.</td></tr>
-                    ) : records.map(r => (
+                    {filteredRecords.length === 0 ? (
+                        <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No records found matching your search.</td></tr>
+                    ) : filteredRecords.map(r => (
                       <tr key={r.id} className="hover:bg-[#1c1c1c]">
                         <td className="px-4 py-3 flex items-center gap-3">
                            <div className="w-6 h-6 rounded bg-[#262626] border border-[#2e2e2e] text-[#a1a1a1] text-[10px] flex items-center justify-center font-bold">
@@ -1207,9 +1280,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
               
               {/* Mobile Card View */}
               <div className="xl:hidden flex flex-col divide-y divide-[#2e2e2e]">
-                {records.length === 0 ? (
-                  <div className="p-8 text-center text-[#a1a1a1] text-sm">No service logs submitted yet.</div>
-                ) : records.map(r => (
+                {filteredRecords.length === 0 ? (
+                  <div className="p-8 text-center text-[#a1a1a1] text-sm">No records found.</div>
+                ) : filteredRecords.map(r => (
                   <div key={r.id} className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors">
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex items-start gap-3">
@@ -1291,93 +1364,155 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         )}
 
         {tab === 'progress' && (
-          <div className="space-y-8 max-w-6xl">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">Student Progress Monitoring</h2>
-              <p className="text-[#a1a1a1] text-sm mt-1">Track total hours rendered per student (Goal: 20hrs).</p>
+          <div className="space-y-6 max-w-6xl">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                 <div className="bg-[#171717]/50 p-2 rounded-lg border border-[#2e2e2e]">
+                    <CheckCircle2 className="w-5 h-5 text-[#3ecf8e]" />
+                 </div>
+                 <div>
+                    <h2 className="text-xl font-bold tracking-tight">Student Progress</h2>
+                    <p className="text-[#a1a1a1] text-[11px] font-medium tracking-wide">Goal: 20 verified hours for completion.</p>
+                 </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                 <button 
+                  onClick={async () => {
+                    const eligible = studentProgress.filter(s => s.verifiedHours >= 20 && !s.approval);
+                    if (eligible.length === 0) {
+                      showAlert("Nothing to Approve", "No students currently meet the 20-hour requirement for approval.", "info");
+                      return;
+                    }
+                    if (!window.confirm(`Batch approve completion for ${eligible.length} eligible students?`)) return;
+                    
+                    const adminDoc = members.find(m => m.id === user?.uid);
+                    if (!adminDoc || !adminDoc.signature) {
+                      showAlert("Action Required", "You must set up your digital signature before bulk approving.", "warning");
+                      setTab('settings');
+                      return;
+                    }
+
+                    try {
+                      for (const student of eligible) {
+                        await addDoc(collection(db, 'completions'), {
+                          studentNo: student.studentNo,
+                          approverName: adminDoc.displayName,
+                          approverRole: (adminDoc.role === 'admin' || adminDoc.role === 'developer') ? 'Head, Office of Student Affairs' : 'OSA Staff',
+                          approverSignature: adminDoc.signature,
+                          approvedAt: serverTimestamp()
+                        });
+                      }
+                      showAlert("Success", `${eligible.length} students approved successfully.`, "success");
+                      fetchData();
+                    } catch (e) {
+                      showAlert("Error", "Bulk approval failed.", "error");
+                    }
+                  }}
+                  className="bg-[#3ecf8e] text-black text-[10px] font-bold uppercase tracking-tight px-3 py-2 rounded-lg hover:bg-[#34b27b] transition-all flex items-center gap-2 shadow-lg"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Approve Eligible
+                </button>
+                <button 
+                  onClick={async () => {
+                    const ready = studentProgress.filter(s => s.approval);
+                    if (ready.length === 0) {
+                      showAlert("No Approved Students", "No students have been approved for completion yet.", "info");
+                      return;
+                    }
+                    if (!window.confirm(`Send completion emails to ${ready.length} approved students?`)) return;
+                    
+                    showAlert("Sending...", "Batch sending emails in progress. This may take a moment.", "info");
+                    
+                    let sentCount = 0;
+                    for (const student of ready) {
+                      try {
+                        await sendCompletionEmail(student);
+                        sentCount++;
+                      } catch (e) {
+                        console.error(`Failed to send to ${student.studentEmail}`, e);
+                      }
+                    }
+                    showAlert("Success", `Finished sending ${sentCount} emails.`, "success");
+                  }}
+                  className="bg-blue-500 text-white text-[10px] font-bold uppercase tracking-tight px-3 py-2 rounded-lg hover:bg-blue-600 transition-all flex items-center gap-2 shadow-lg"
+                >
+                  <Mail className="w-3.5 h-3.5" /> Send Emails
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-               <div className="bg-[#171717] border border-[#2e2e2e] p-5 rounded-lg">
-                  <div className="text-xs text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Total Students</div>
-                  <div className="text-3xl font-bold">{studentProgress.length}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+               <div className="bg-[#171717] border border-[#2e2e2e] p-4 rounded-lg">
+                  <div className="text-[10px] text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Total Students</div>
+                  <div className="text-2xl font-bold">{studentProgressRaw.length}</div>
                </div>
-               <div className="bg-[#171717] border border-[#2e2e2e] p-5 rounded-lg">
-                  <div className="text-xs text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Completed (20hr+)</div>
-                  <div className="text-3xl font-bold text-[#3ecf8e]">{studentProgress.filter(s => s.verifiedHours >= 20).length}</div>
+               <div className="bg-[#171717] border border-[#2e2e2e] p-4 rounded-lg">
+                  <div className="text-[10px] text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Completed</div>
+                  <div className="text-2xl font-bold text-[#3ecf8e]">{studentProgressRaw.filter(s => s.verifiedHours >= 20).length}</div>
                </div>
-               <div className="bg-[#171717] border border-[#2e2e2e] p-5 rounded-lg">
-                  <div className="text-xs text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">Pending Verification</div>
-                  <div className="text-3xl font-bold text-amber-500">{studentProgress.filter(s => s.totalHours > s.verifiedHours).length}</div>
+               <div className="bg-[#171717] border border-[#2e2e2e] p-4 rounded-lg">
+                  <div className="text-[10px] text-[#a1a1a1] uppercase font-bold tracking-wider mb-1">In Progress</div>
+                  <div className="text-2xl font-bold text-amber-500">{studentProgressRaw.filter(s => s.verifiedHours < 20).length}</div>
                </div>
             </div>
 
             <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto">
               <table className="min-w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-[10px] font-bold uppercase tracking-wider">
                   <tr>
-                    <th className="px-4 py-3">Student Name</th>
-                    <th className="px-4 py-3">Program/Sec</th>
-                    <th className="px-4 py-3">Rendered Hours</th>
-                    <th className="px-4 py-3">Progress</th>
-                    <th className="px-4 py-3">Target</th>
+                    <th className="px-4 py-3">Student</th>
+                    <th className="px-4 py-3 text-center">Program/Sec</th>
+                    <th className="px-4 py-3 text-center">Hours</th>
+                    <th className="px-4 py-3 text-center w-40">Progress</th>
                     <th className="px-4 py-3 text-right">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2e2e2e]">
                   {studentProgress.length === 0 ? (
-                    <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No student data available.</td></tr>
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-[#a1a1a1]">No student data available.</td></tr>
                   ) : studentProgress.map(s => (
                     <tr key={s.studentNo} className="hover:bg-[#1c1c1c]">
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2">
                          <div className="flex items-center gap-2">
-                           <div className="font-medium text-[#ededed]">{s.studentName}</div>
+                           <div className="font-bold text-[#ededed] text-xs leading-none">{s.studentName}</div>
                            {s.hasNameMismatch && (
-                             <div className="group relative">
-                               <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-help" />
-                               <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-48 p-2 bg-[#2e2e2e] border border-[#3e3e3e] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
-                                 <div className="text-[10px] font-bold text-amber-500 uppercase mb-1">Name Discrepancy</div>
-                                 <div className="text-[9px] text-[#a1a1a1] leading-tight">
-                                   This student ID has been submitted with multiple names:
-                                   <ul className="mt-1 list-disc list-inside">
-                                     {s.allNames?.map((n, i) => <li key={i} className="truncate">{n}</li>)}
-                                   </ul>
-                                   Please edit the Service Logs to standardize the name.
-                                 </div>
-                               </div>
-                             </div>
+                             <AlertCircle className="w-3 h-3 text-amber-500" />
                            )}
                          </div>
-                         <div className="text-[10px] text-[#a1a1a1] font-mono">{s.studentEmail}</div>
+                         <div className="text-[9px] text-[#3ecf8e] font-mono leading-none mt-0.5">{s.studentNo}</div>
                       </td>
-                      <td className="px-4 py-3 text-[#a1a1a1]">
-                        {s.program} • {s.section}
+                      <td className="px-4 py-2 text-center text-[10px] text-[#a1a1a1]">
+                        {s.program}/{s.section}
                       </td>
-                      <td className="px-4 py-3 font-bold text-[#ededed]">
-                        {s.verifiedHours.toFixed(1)} <span className="text-[#a1a1a1] font-normal">/ {s.totalHours.toFixed(1)} total</span>
-                      </td>
-                      <td className="px-4 py-3 w-48">
-                        <div className="h-1.5 w-full bg-[#262626] rounded-full overflow-hidden">
-                           <div 
-                              className={`h-full rounded-full transition-all duration-1000 ${s.verifiedHours >= 20 ? 'bg-[#3ecf8e]' : 'bg-[#3ecf8e]/40'}`} 
-                              style={{ width: `${Math.min(100, (s.verifiedHours / 20) * 100)}%` }}
-                           />
+                      <td className="px-4 py-2 text-center">
+                         <div className="font-bold text-[#ededed] text-xs">
+                          {s.verifiedHours.toFixed(1)}h <span className="text-[#666] font-normal italic">/ {s.totalHours.toFixed(1)}h</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">20.0 hrs</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1 bg-[#262626] flex-1 rounded-full overflow-hidden border border-white/5">
+                            <div 
+                                className={`h-full rounded-full transition-all duration-1000 ${s.verifiedHours >= 20 ? 'bg-[#3ecf8e]' : 'bg-[#3ecf8e]/40'}`} 
+                                style={{ width: `${Math.min(100, (s.verifiedHours / 20) * 100)}%` }}
+                             />
+                          </div>
+                          <span className="text-[9px] text-[#a1a1a1] w-6 text-right font-mono">{Math.round(Math.min(100, (s.verifiedHours / 20) * 100))}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-right">
                         {s.verifiedHours >= 20 ? (
-                           <span className="text-[#3ecf8e] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#3ecf8e]/10 rounded flex items-center gap-1">
-                             <CheckCircle2 className="w-3 h-3" /> Completed
+                           <span className="text-[#3ecf8e] text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#3ecf8e]/5 rounded inline-flex items-center gap-1 border border-[#3ecf8e]/20">
+                             <CheckSquare className="w-3 h-3" /> Done
                            </span>
                         ) : (
-                           <span className="text-[#a1a1a1] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#262626] rounded">
-                             In Progress
+                           <span className="text-[#a1a1a1] text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-[#262626] rounded border border-white/5">
+                             Active
                            </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-2 text-right">
                         {s.approval ? (
                            <div className="flex flex-col items-end gap-2">
                              <span className="text-[#3ecf8e] text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 bg-[#3ecf8e]/10 rounded flex items-center gap-1">
@@ -1864,6 +1999,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       <AlertModal
