@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, deleteDoc, setDoc, getDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout } from '../lib/supabase';
 import { useForm } from 'react-hook-form';
-import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Edit2, Trash2, History, Search, Settings, Upload } from 'lucide-react';
+import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Edit2, Trash2, History, Search, Settings, Upload, Menu, X } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useRef } from 'react';
 import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
@@ -59,6 +59,7 @@ type AdminMember = {
 export default function Staff() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const [tasks, setTasks] = useState<Task[]>([]);
   const [records, setRecords] = useState<ServiceRecord[]>([]);
@@ -429,9 +430,25 @@ export default function Staff() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1c1c1c] text-[#ededed] flex flex-col md:flex-row font-sans">
-      <aside className="w-full md:w-64 border-r border-[#2e2e2e] bg-[#171717] flex flex-col">
-        <div className="p-6 border-b border-[#2e2e2e]">
+    <div className="min-h-screen bg-[#1c1c1c] text-[#ededed] flex flex-col md:flex-row font-sans relative">
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-[#2e2e2e] bg-[#171717] sticky top-0 z-20">
+        <div className="text-[#ededed] font-bold text-lg flex items-center gap-2 tracking-tight">
+          <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
+            <Users className="w-4 h-4 text-black" />
+          </div>
+          Staff Portal
+        </div>
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-[#ededed]">
+          {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
+      <aside className={`fixed md:sticky top-0 h-[100dvh] z-40 w-64 border-r border-[#2e2e2e] bg-[#171717] flex flex-col transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-[#2e2e2e] hidden md:block">
           <div className="text-[#ededed] font-bold text-lg flex items-center gap-2 tracking-tight">
              <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
                 <Users className="w-4 h-4 text-black" />
@@ -441,11 +458,11 @@ export default function Staff() {
           <div className="text-[10px] text-[#a1a1a1] mt-1 italic">Assign & Verify Task</div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          <button onClick={() => setTab('tasks')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'tasks' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
+          <button onClick={() => { setTab('tasks'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'tasks' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
             <Plus className="w-4 h-4" />
             <span className="text-sm font-medium">Assign Task</span>
           </button>
-          <button onClick={() => setTab('records')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'records' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
+          <button onClick={() => { setTab('records'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'records' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
             <CheckCircle2 className="w-4 h-4" />
             <span className="text-sm font-medium">Approve Logs</span>
             {records.filter(r => r.status === 'pending').length > 0 && (
@@ -454,15 +471,15 @@ export default function Staff() {
               </span>
             )}
           </button>
-          <button onClick={() => setTab('history')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'history' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
+          <button onClick={() => { setTab('history'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'history' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
             <History className="w-4 h-4" />
             <span className="text-sm font-medium">Task History</span>
           </button>
-          <button onClick={() => setTab('members')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'members' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
+          <button onClick={() => { setTab('members'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'members' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
             <Users className="w-4 h-4" />
             <span className="text-sm font-medium">Members</span>
           </button>
-          <button onClick={() => setTab('settings')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'settings' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
+          <button onClick={() => { setTab('settings'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${tab === 'settings' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e]'}`}>
             <Settings className="w-4 h-4" />
             <span className="text-sm font-medium">Settings</span>
           </button>
@@ -652,8 +669,8 @@ export default function Staff() {
                 </form>
               </div>
             )}
-            <div className="border border-[#2e2e2e] rounded-xl overflow-hidden bg-[#171717]">
-               <table className="w-full text-left text-sm whitespace-nowrap">
+            <div className="border border-[#2e2e2e] rounded-xl overflow-hidden bg-[#171717] overflow-x-auto w-full">
+               <table className="min-w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#262626] text-[#a1a1a1] text-[10px] uppercase font-bold tracking-widest border-b border-[#2e2e2e]">
                     <tr>
                        <th className="px-6 py-4">Student Info</th>
@@ -715,8 +732,8 @@ export default function Staff() {
               <History className="w-6 h-6 text-[#a1a1a1]" />
               Task Execution History
             </h2>
-            <div className="border border-[#2e2e2e] rounded-xl bg-[#171717] overflow-hidden">
-               <table className="w-full text-left text-sm whitespace-nowrap">
+            <div className="border border-[#2e2e2e] rounded-xl bg-[#171717] overflow-hidden overflow-x-auto w-full">
+               <table className="min-w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#262626] text-[#a1a1a1] text-[10px] uppercase font-bold tracking-widest border-b border-[#2e2e2e]">
                      <tr>
                         <th className="px-6 py-4">Task Details</th>
@@ -781,7 +798,7 @@ export default function Staff() {
               <p className="text-[#a1a1a1] text-sm mt-1">Directory of Registered OSA Admins and Staff Members.</p>
             </div>
 
-            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717]">
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto w-full">
                <table className="min-w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
                     <tr>

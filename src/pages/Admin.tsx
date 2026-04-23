@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, getDocs, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, deleteDoc, setDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout } from '../lib/supabase';
 import { useForm } from 'react-hook-form';
-import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { generateObligationPDF } from '../utils/pdfGenerator';
 import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
@@ -84,7 +84,7 @@ type CompletionApproval = {
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [members, setMembers] = useState<AdminMember[]>([]);
@@ -754,10 +754,28 @@ const handleApproveCompletion = async (student: StudentProgress) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#1c1c1c] text-[#ededed] flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen bg-[#1c1c1c] text-[#ededed] flex flex-col md:flex-row font-sans relative">
+      {/* Mobile Top Bar */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-[#2e2e2e] bg-[#171717] sticky top-0 z-20">
+        <div className="text-[#ededed] font-bold text-lg flex items-center gap-2 tracking-tight">
+          <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
+            <LayoutDashboard className="w-4 h-4 text-black" />
+          </div>
+          OSA Dashboard
+        </div>
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-[#ededed]">
+          {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-full md:w-64 border-r border-[#2e2e2e] bg-[#171717] flex flex-col">
-        <div className="p-6 border-b border-[#2e2e2e]">
+      <aside className={`fixed md:sticky top-0 h-[100dvh] z-40 w-64 border-r border-[#2e2e2e] bg-[#171717] flex flex-col transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-[#2e2e2e] hidden md:block">
           <div className="text-[#ededed] font-bold text-lg flex items-center gap-2 tracking-tight">
             <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
               <LayoutDashboard className="w-4 h-4 text-black" />
@@ -768,14 +786,14 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         </div>
         <nav className="flex-1 p-4 space-y-1">
           <button 
-            onClick={() => setTab('tasks')}
+            onClick={() => { setTab('tasks'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'tasks' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
           >
             <Clock className="w-4 h-4" />
             <span className="text-sm font-medium">Manage Tasks</span>
           </button>
           <button 
-            onClick={() => setTab('records')}
+            onClick={() => { setTab('records'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'records' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
           >
             <Users className="w-4 h-4" />
@@ -787,28 +805,28 @@ const handleApproveCompletion = async (student: StudentProgress) => {
             )}
           </button>
           <button 
-            onClick={() => setTab('progress')}
+            onClick={() => { setTab('progress'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'progress' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
           >
             <CheckCircle2 className="w-4 h-4" />
             <span className="text-sm font-medium">Student Progress</span>
           </button>
           <button 
-            onClick={() => setTab('history')}
+            onClick={() => { setTab('history'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'history' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
           >
             <History className="w-4 h-4" />
             <span className="text-sm font-medium">Task History</span>
           </button>
           <button 
-            onClick={() => setTab('members')}
+            onClick={() => { setTab('members'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'members' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
           >
             <Users className="w-4 h-4" />
             <span className="text-sm font-medium">Members</span>
           </button>
           <button 
-            onClick={() => setTab('settings')}
+            onClick={() => { setTab('settings'); setIsSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'settings' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
           >
             <Settings className="w-4 h-4" />
@@ -919,8 +937,8 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                   />
                 </div>
               </div>
-              <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717]">
-                <table className="min-w-full text-left text-sm">
+              <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto w-full">
+                <table className="min-w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-3">Task Title</th>
@@ -1296,7 +1314,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
               <p className="text-[#a1a1a1] text-sm mt-1">Review completed tasks and corresponding student logs.</p>
             </div>
             
-            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717]">
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto w-full">
                <table className="min-w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
                     <tr>
@@ -1389,7 +1407,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
               </div>
             </div>
 
-            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717]">
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto w-full">
                <table className="min-w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
                     <tr>
