@@ -96,6 +96,10 @@ export default function Admin() {
   const [editingRecord, setEditingRecord] = useState<ServiceRecord | null>(null);
   const [staffOption, setStaffOption] = useState<'me' | 'other'>('me');
   const [searchTerm, setSearchTerm] = useState('');
+  const [recordsSearch, setRecordsSearch] = useState('');
+  const [progressSearch, setProgressSearch] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [membersSearch, setMembersSearch] = useState('');
   const [savingSignature, setSavingSignature] = useState(false);
   const adminSigCanvas = useRef<SignatureCanvas>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -746,21 +750,43 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     }, {})
   ).sort((a, b) => (b as StudentProgress).verifiedHours - (a as StudentProgress).verifiedHours) as StudentProgress[];
 
+  const isTaskDone = (t: Task) => {
+    const taskRecords = records.filter(r => r.taskTitle === t.title && r.date === t.date);
+    return taskRecords.length > 0 && taskRecords.every(r => r.status === 'verified');
+  };
+
+  const activeTasks = tasks.filter(t => {
+    const isPast = t.date < getTodayYYYYMMDD();
+    const done = isTaskDone(t);
+    const searchMatch = t.title.toLowerCase().includes(taskSearch.toLowerCase());
+    return !isPast && !done && searchMatch;
+  });
+
+  const historyTasks = tasks.filter(t => {
+    const isPast = t.date < getTodayYYYYMMDD();
+    const done = isTaskDone(t);
+    const searchMatch = t.title.toLowerCase().includes(historySearch.toLowerCase());
+    return (isPast || done) && searchMatch;
+  });
+
   const studentProgress = studentProgressRaw.filter(s => 
-    s.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.studentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.studentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.program.toLowerCase().includes(searchTerm.toLowerCase())
+    s.studentName.toLowerCase().includes(progressSearch.toLowerCase()) ||
+    s.studentNo.toLowerCase().includes(progressSearch.toLowerCase()) ||
+    s.studentEmail.toLowerCase().includes(progressSearch.toLowerCase()) ||
+    s.program.toLowerCase().includes(progressSearch.toLowerCase())
   );
 
   const filteredRecords = records.filter(r => 
-    r.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.studentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.taskTitle.toLowerCase().includes(searchTerm.toLowerCase())
+    r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) ||
+    r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) ||
+    r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
   );
 
-  const activeTasks = tasks.filter(t => t.date >= getTodayYYYYMMDD() && (t.title.toLowerCase().includes(taskSearch.toLowerCase()) || t.title.toLowerCase().includes(searchTerm.toLowerCase())));
-  const historyTasks = tasks.filter(t => t.date < getTodayYYYYMMDD() && (t.title.toLowerCase().includes(searchTerm.toLowerCase())));
+  const filteredMembers = members.filter(m => 
+    m.displayName.toLowerCase().includes(membersSearch.toLowerCase()) ||
+    m.email.toLowerCase().includes(membersSearch.toLowerCase()) ||
+    m.role.toLowerCase().includes(membersSearch.toLowerCase())
+  );
 
   if (loadingAuth) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
 
@@ -831,7 +857,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${tab === 'history' ? 'bg-[#2e2e2e] text-[#3ecf8e]' : 'text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed]'}`}
           >
             <History className="w-4 h-4" />
-            <span className="text-sm font-medium">Task History</span>
+            <span className="text-sm font-medium">Task Execution History</span>
           </button>
           <button 
             onClick={() => { setTab('members'); setIsSidebarOpen(false); }}
@@ -877,25 +903,13 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                 {tab === 'tasks' && 'Schedule Management'}
                 {tab === 'records' && 'Service Records'}
                 {tab === 'progress' && 'Performance Tracker'}
-                {tab === 'history' && 'Task Archive'}
+                {tab === 'history' && 'Task Execution History'}
                 {tab === 'members' && 'Staff Directory'}
                 {tab === 'settings' && 'System Preferences'}
               </h1>
            </div>
            
            <div className="flex items-center gap-3">
-              {(tab !== 'settings' && tab !== 'members') && (
-                <div className="relative group">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1] transition-colors group-focus-within:text-[#3ecf8e]" />
-                  <input 
-                    type="text" 
-                    placeholder="Search..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-[#1c1c1c] border border-[#2e2e2e] text-xs rounded-full py-2 pl-10 pr-4 w-full md:w-64 focus:outline-none focus:ring-1 focus:ring-[#3ecf8e] transition-all placeholder:text-[#a1a1a1]/30"
-                  />
-                </div>
-              )}
               <div className="hidden md:flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1] bg-[#1c1c1c] px-3 py-1.5 rounded-full border border-[#2e2e2e]">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" />
                 Live
@@ -1023,7 +1037,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                       <span className="text-[9px] text-[#a1a1a1] uppercase font-bold italic border border-[#2e2e2e] px-2 py-0.5 rounded">In Progress</span>
                                    )}
                                    <button 
-                                      onClick={() => { setTab('records'); setSearchTerm(t.title); window.scrollTo({top:0, behavior: 'smooth'}); }} 
+                                      onClick={() => { setTab('records'); setRecordsSearch(t.title); window.scrollTo({top:0, behavior: 'smooth'}); }} 
                                       className="text-xs text-blue-400 font-bold hover:underline underline-offset-4 flex items-center gap-1 bg-blue-400/5 px-2 py-1 rounded border border-blue-400/20 transition-all hover:bg-blue-400/10"
                                    >
                                       View Logs
@@ -1073,7 +1087,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                 <span className="text-[10px] text-[#a1a1a1] uppercase font-bold italic px-2 py-0.5 bg-[#262626] rounded border border-white/5">In Progress</span>
                              )}
                              <button 
-                               onClick={() => { setTab('records'); setSearchTerm(t.title); window.scrollTo({top:0, behavior: 'smooth'}); }}
+                               onClick={() => { setTab('records'); setRecordsSearch(t.title); window.scrollTo({top:0, behavior: 'smooth'}); }}
                                className="text-[10px] text-blue-400 font-bold uppercase hover:underline border border-blue-400/20 px-2 py-0.5 rounded bg-blue-400/5 transition-all"
                              >
                                View Logs
@@ -1096,10 +1110,22 @@ const handleApproveCompletion = async (student: StudentProgress) => {
 
         {tab === 'records' && (
           <div className="space-y-8 max-w-6xl">
-             <div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
               <h2 className="text-xl font-bold tracking-tight">Service Logs</h2>
-              <p className="text-[#a1a1a1] text-sm mt-1">Review and verify student obligations.</p>
+              <p className="text-[#a1a1a1] text-sm mt-1 text-balance">Review and verify student obligations.</p>
             </div>
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+              <input 
+                type="text" 
+                placeholder="Search student or task..." 
+                value={recordsSearch}
+                onChange={(e) => setRecordsSearch(e.target.value)}
+                className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+              />
+            </div>
+          </div>
 
             {editingRecord && (
               <div className="bg-[#171717] border border-amber-500/50 p-6 rounded-lg space-y-4">
@@ -1365,79 +1391,91 @@ const handleApproveCompletion = async (student: StudentProgress) => {
 
         {tab === 'progress' && (
           <div className="space-y-6 max-w-6xl">
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                 <div className="bg-[#171717]/50 p-2 rounded-lg border border-[#2e2e2e]">
-                    <CheckCircle2 className="w-5 h-5 text-[#3ecf8e]" />
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-[#171717] p-6 rounded-xl border border-[#2e2e2e]">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-[#3ecf8e]/10 rounded-xl flex items-center justify-center text-[#3ecf8e] shrink-0 border border-[#3ecf8e]/20">
+                    <CheckCircle2 className="w-6 h-6" />
                  </div>
                  <div>
                     <h2 className="text-xl font-bold tracking-tight">Student Progress</h2>
-                    <p className="text-[#a1a1a1] text-[11px] font-medium tracking-wide">Goal: 20 verified hours for completion.</p>
+                    <p className="text-[#a1a1a1] text-xs font-medium">Goal: 20 verified hours for completion.</p>
                  </div>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                 <button 
-                  onClick={async () => {
-                    const eligible = studentProgress.filter(s => s.verifiedHours >= 20 && !s.approval);
-                    if (eligible.length === 0) {
-                      showAlert("Nothing to Approve", "No students currently meet the 20-hour requirement for approval.", "info");
-                      return;
-                    }
-                    if (!window.confirm(`Batch approve completion for ${eligible.length} eligible students?`)) return;
-                    
-                    const adminDoc = members.find(m => m.id === user?.uid);
-                    if (!adminDoc || !adminDoc.signature) {
-                      showAlert("Action Required", "You must set up your digital signature before bulk approving.", "warning");
-                      setTab('settings');
-                      return;
-                    }
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+                  <input 
+                    type="text" 
+                    placeholder="Search name, ID or email..." 
+                    value={progressSearch}
+                    onChange={(e) => setProgressSearch(e.target.value)}
+                    className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-2 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                   <button 
+                    onClick={async () => {
+                      const eligible = studentProgress.filter(s => s.verifiedHours >= 20 && !s.approval);
+                      if (eligible.length === 0) {
+                        showAlert("Nothing to Approve", "No students currently meet the 20-hour requirement for approval.", "info");
+                        return;
+                      }
+                      if (!window.confirm(`Batch approve completion for ${eligible.length} eligible students?`)) return;
+                      
+                      const adminDoc = members.find(m => m.id === user?.uid);
+                      if (!adminDoc || !adminDoc.signature) {
+                        showAlert("Action Required", "You must set up your digital signature before bulk approving.", "warning");
+                        setTab('settings');
+                        return;
+                      }
 
-                    try {
-                      for (const student of eligible) {
-                        await addDoc(collection(db, 'completions'), {
-                          studentNo: student.studentNo,
-                          approverName: adminDoc.displayName,
-                          approverRole: (adminDoc.role === 'admin' || adminDoc.role === 'developer') ? 'Head, Office of Student Affairs' : 'OSA Staff',
-                          approverSignature: adminDoc.signature,
-                          approvedAt: serverTimestamp()
-                        });
-                      }
-                      showAlert("Success", `${eligible.length} students approved successfully.`, "success");
-                      fetchData();
-                    } catch (e) {
-                      showAlert("Error", "Bulk approval failed.", "error");
-                    }
-                  }}
-                  className="bg-[#3ecf8e] text-black text-[10px] font-bold uppercase tracking-tight px-3 py-2 rounded-lg hover:bg-[#34b27b] transition-all flex items-center gap-2 shadow-lg"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Approve Eligible
-                </button>
-                <button 
-                  onClick={async () => {
-                    const ready = studentProgress.filter(s => s.approval);
-                    if (ready.length === 0) {
-                      showAlert("No Approved Students", "No students have been approved for completion yet.", "info");
-                      return;
-                    }
-                    if (!window.confirm(`Send completion emails to ${ready.length} approved students?`)) return;
-                    
-                    showAlert("Sending...", "Batch sending emails in progress. This may take a moment.", "info");
-                    
-                    let sentCount = 0;
-                    for (const student of ready) {
                       try {
-                        await sendCompletionEmail(student);
-                        sentCount++;
+                        for (const student of eligible) {
+                          await addDoc(collection(db, 'completions'), {
+                            studentNo: student.studentNo,
+                            approverName: adminDoc.displayName,
+                            approverRole: (adminDoc.role === 'admin' || adminDoc.role === 'developer') ? 'Head, Office of Student Affairs' : 'OSA Staff',
+                            approverSignature: adminDoc.signature,
+                            approvedAt: serverTimestamp()
+                          });
+                        }
+                        showAlert("Success", `${eligible.length} students approved successfully.`, "success");
+                        fetchData();
                       } catch (e) {
-                        console.error(`Failed to send to ${student.studentEmail}`, e);
+                        showAlert("Error", "Bulk approval failed.", "error");
                       }
-                    }
-                    showAlert("Success", `Finished sending ${sentCount} emails.`, "success");
-                  }}
-                  className="bg-blue-500 text-white text-[10px] font-bold uppercase tracking-tight px-3 py-2 rounded-lg hover:bg-blue-600 transition-all flex items-center gap-2 shadow-lg"
-                >
-                  <Mail className="w-3.5 h-3.5" /> Send Emails
-                </button>
+                    }}
+                    className="bg-[#3ecf8e] text-black text-[10px] font-bold uppercase tracking-tight px-3 py-2.5 rounded-lg hover:bg-[#34b27b] transition-all flex items-center gap-2 shadow-lg"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" /> Approve Eligible
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      const ready = studentProgress.filter(s => s.approval);
+                      if (ready.length === 0) {
+                        showAlert("No Approved Students", "No students have been approved for completion yet.", "info");
+                        return;
+                      }
+                      if (!window.confirm(`Send completion emails to ${ready.length} approved students?`)) return;
+                      
+                      showAlert("Sending...", "Batch sending emails in progress. This may take a moment.", "info");
+                      
+                      let sentCount = 0;
+                      for (const student of ready) {
+                        try {
+                          await sendCompletionEmail(student);
+                          sentCount++;
+                        } catch (e) {
+                          console.error(`Failed to send to ${student.studentEmail}`, e);
+                        }
+                      }
+                      showAlert("Success", `Finished sending ${sentCount} emails.`, "success");
+                    }}
+                    className="bg-blue-500 text-white text-[10px] font-bold uppercase tracking-tight px-3 py-2.5 rounded-lg hover:bg-blue-600 transition-all flex items-center gap-2 shadow-lg"
+                  >
+                    <Mail className="w-3.5 h-3.5" /> Send Emails
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1567,9 +1605,21 @@ const handleApproveCompletion = async (student: StudentProgress) => {
 
         {tab === 'history' && (
           <div className="space-y-8 max-w-6xl">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">Task Execution History</h2>
-              <p className="text-[#a1a1a1] text-sm mt-1">Review completed tasks and corresponding student logs.</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight">Task Execution History</h2>
+                <p className="text-[#a1a1a1] text-sm mt-1">Review completed tasks and corresponding student logs.</p>
+              </div>
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+                <input 
+                  type="text" 
+                  placeholder="Search history..." 
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+                />
+              </div>
             </div>
             
             <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
@@ -1697,9 +1747,21 @@ const handleApproveCompletion = async (student: StudentProgress) => {
 
         {tab === 'members' && (
           <div className="space-y-8 max-w-6xl">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">System Members & Settings</h2>
-              <p className="text-[#a1a1a1] text-sm mt-1">Directory of Registered OSA Admins and Staff Members, and System Registration Control.</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight">System Members & Settings</h2>
+                <p className="text-[#a1a1a1] text-sm mt-1">Directory of Registered OSA Admins and Staff Members, and System Registration Control.</p>
+              </div>
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+                <input 
+                  type="text" 
+                  placeholder="Search staff members..." 
+                  value={membersSearch}
+                  onChange={(e) => setMembersSearch(e.target.value)}
+                  className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none transition-colors placeholder:text-[#a1a1a1]/30"
+                />
+              </div>
             </div>
 
             <div className="bg-[#1c1c1c] rounded-xl border border-[#2e2e2e] overflow-hidden p-6 mb-6">
@@ -1735,9 +1797,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#2e2e2e]">
-                      {members.length === 0 ? (
-                        <tr><td colSpan={4} className="px-6 py-10 text-center text-[#a1a1a1]">No members registered yet.</td></tr>
-                      ) : members.map(m => (
+                      {filteredMembers.length === 0 ? (
+                        <tr><td colSpan={4} className="px-6 py-10 text-center text-[#a1a1a1]">No members found matching your search.</td></tr>
+                      ) : filteredMembers.map(m => (
                         <tr key={m.id} className="hover:bg-[#1c1c1c]">
                           <td className="px-6 py-4">
                              <div className="flex items-center gap-2">
@@ -1801,9 +1863,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                
                {/* Mobile Card View */}
                <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
-                 {members.length === 0 ? (
-                   <div className="p-8 text-center text-[#a1a1a1] text-sm">No members registered yet.</div>
-                 ) : members.map(m => (
+                 {filteredMembers.length === 0 ? (
+                   <div className="p-8 text-center text-[#a1a1a1] text-sm">No members found mapping your search.</div>
+                 ) : filteredMembers.map(m => (
                    <div key={m.id} className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors">
                      <div className="flex justify-between items-start gap-4">
                        <div className="flex items-center gap-3 overflow-hidden">
