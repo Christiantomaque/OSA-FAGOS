@@ -891,14 +891,14 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                     const opt = e.target.value as 'me' | 'other';
                     setStaffOption(opt);
                     if (opt === 'me') {
-                      setValue('staffName', user?.displayName || user?.email || '');
+                      setValue('staffName', members.find(m => m.id === user?.uid)?.displayName || user?.displayName || user?.email || '');
                     } else {
                       setValue('staffName', '');
                     }
                   }}
                   className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2 rounded-md text-sm focus:ring-1 focus:ring-[#3ecf8e] outline-none"
                 >
-                  <option value="me">Me ({user?.displayName || 'Admin'})</option>
+                  <option value="me">Me ({members.find(m => m.id === user?.uid)?.displayName || user?.displayName || 'Admin'})</option>
                   <option value="other">Specify Name...</option>
                 </select>
                 {staffOption === 'other' && (
@@ -937,46 +937,84 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                   />
                 </div>
               </div>
-              <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto w-full">
-                <table className="min-w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
-                    <tr>
-                      <th className="px-4 py-3">Task Title</th>
-                      <th className="px-4 py-3">Schedule</th>
-                      <th className="px-4 py-3">Duration</th>
-                      <th className="px-4 py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2e2e2e]">
-                    {activeTasks.length === 0 ? (
-                      <tr><td colSpan={4} className="px-4 py-4 text-center text-[#a1a1a1]">No active tasks found matching your search.</td></tr>
-                    ) : activeTasks.map(t => (
-                      <tr key={t.id} className="hover:bg-[#1c1c1c]">
-                        <td className="px-4 py-3">
-                           <div className="font-medium text-[#ededed]">{t.title}</div>
-                           <div className="text-[10px] text-[#a1a1a1] uppercase font-bold">{t.staffName}</div>
-                        </td>
-                        <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
-                          <div className="text-[#ededed] mb-1">{formatDate(t.date)}</div>
-                          <div>{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
-                        </td>
-                        <td className="px-4 py-3 text-[#3ecf8e] font-bold">{t.duration?.toFixed(1)} hrs</td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                             {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
-                               <span className="text-[10px] text-[#555] uppercase font-bold italic pr-2">Task Locked (In Progress)</span>
-                             ) : (
-                               <>
-                                 <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
-                                 <button onClick={() => handleDeleteTask(t.id)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Delete Task"><Trash2 className="w-4 h-4" /></button>
-                               </>
-                             )}
-                          </div>
-                        </td>
+              <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+                {/* Desktop View */}
+                <div className="hidden lg:block overflow-x-auto w-full">
+                  <table className="min-w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3">Task Title</th>
+                        <th className="px-4 py-3">Schedule</th>
+                        <th className="px-4 py-3">Duration</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-[#2e2e2e]">
+                      {activeTasks.length === 0 ? (
+                        <tr><td colSpan={4} className="px-4 py-4 text-center text-[#a1a1a1]">No active tasks found matching your search.</td></tr>
+                      ) : activeTasks.map(t => (
+                        <tr key={t.id} className="hover:bg-[#1c1c1c]">
+                          <td className="px-4 py-3">
+                             <div className="font-medium text-[#ededed]">{t.title}</div>
+                             <div className="text-[10px] text-[#a1a1a1] uppercase font-bold">{t.staffName}</div>
+                          </td>
+                          <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
+                            <div className="text-[#ededed] mb-1">{formatDate(t.date)}</div>
+                            <div>{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                          </td>
+                          <td className="px-4 py-3 text-[#3ecf8e] font-bold">{t.duration?.toFixed(1)} hrs</td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex justify-end gap-2">
+                               {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
+                                 <span className="text-[10px] text-[#555] uppercase font-bold italic pr-2">Task Locked (In Progress)</span>
+                               ) : (
+                                 <>
+                                   <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
+                                   <button onClick={() => handleDeleteTask(t.id)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Delete Task"><Trash2 className="w-4 h-4" /></button>
+                                 </>
+                               )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Mobile Card View */}
+                <div className="lg:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                  {activeTasks.length === 0 ? (
+                    <div className="p-8 text-center text-[#a1a1a1] text-sm">No active tasks found matching your search.</div>
+                  ) : activeTasks.map(t => (
+                    <div key={t.id} className="p-4 space-y-3 hover:bg-[#1c1c1c] transition-colors">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-[#ededed] break-words">{t.title}</div>
+                          <div className="text-[10px] text-[#a1a1a1] uppercase font-bold mt-0.5">{t.staffName}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-[#3ecf8e] font-bold text-sm bg-[#3ecf8e]/10 px-2 py-0.5 rounded">{t.duration?.toFixed(1)}h</div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                        <div className="text-[#ededed] text-xs font-mono mb-1">{formatDate(t.date)}</div>
+                        <div className="text-[#a1a1a1] text-xs font-mono">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                      </div>
+                      
+                      <div className="flex justify-end pt-2 border-t border-[#2e2e2e]/50">
+                        {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
+                          <span className="text-[10px] text-[#555] uppercase font-bold italic">Task Locked (In Progress)</span>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button onClick={() => handleEditTask(t)} className="px-3 py-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors text-xs flex items-center gap-1 font-medium"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
+                            <button onClick={() => handleDeleteTask(t.id)} className="px-3 py-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors text-xs flex items-center gap-1 font-medium"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1062,106 +1100,190 @@ const handleApproveCompletion = async (student: StudentProgress) => {
               </div>
             )}
 
-            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto">
-              <table className="min-w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
-                  <tr>
-                    <th className="px-4 py-3">Beneficiary</th>
-                    <th className="px-4 py-3">Program/Sec</th>
-                    <th className="px-4 py-3">Duty Task</th>
-                    <th className="px-4 py-3">Time Log</th>
-                    <th className="px-4 py-3 text-center">Hours</th>
-                    <th className="px-4 py-3 text-center">Status</th>
-                    <th className="px-4 py-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#2e2e2e]">
-                  {records.length === 0 ? (
-                      <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No service logs submitted yet.</td></tr>
-                  ) : records.map(r => (
-                    <tr key={r.id} className="hover:bg-[#1c1c1c]">
-                      <td className="px-4 py-3 flex items-center gap-3">
-                         <div className="w-6 h-6 rounded bg-[#262626] border border-[#2e2e2e] text-[#a1a1a1] text-[10px] flex items-center justify-center font-bold">
-                            {r.studentName.substring(0, 2).toUpperCase()}
-                         </div>
-                         <div>
-                            <div className="font-medium text-[#ededed]">{r.studentName}</div>
-                            <div className="text-[10px] text-[#a1a1a1] font-mono">{r.studentNo}</div>
-                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-[#a1a1a1]">
-                        {r.program} • {r.section}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-[#a1a1a1]">
-                        {r.taskTitle.substring(0, 20)}{r.taskTitle.length > 20 ? '...' : ''}
-                      </td>
-                      <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
-                        {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
-                      </td>
-                      <td className="px-4 py-3 text-center font-bold text-[#ededed]">
-                        {r.creditHours}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/10 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+              {/* Desktop View */}
+              <div className="hidden xl:block overflow-x-auto w-full">
+                <table className="min-w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3">Beneficiary</th>
+                      <th className="px-4 py-3">Program/Sec</th>
+                      <th className="px-4 py-3">Duty Task</th>
+                      <th className="px-4 py-3">Time Log</th>
+                      <th className="px-4 py-3 text-center">Hours</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                      <th className="px-4 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2e2e2e]">
+                    {records.length === 0 ? (
+                        <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No service logs submitted yet.</td></tr>
+                    ) : records.map(r => (
+                      <tr key={r.id} className="hover:bg-[#1c1c1c]">
+                        <td className="px-4 py-3 flex items-center gap-3">
+                           <div className="w-6 h-6 rounded bg-[#262626] border border-[#2e2e2e] text-[#a1a1a1] text-[10px] flex items-center justify-center font-bold">
+                              {r.studentName.substring(0, 2).toUpperCase()}
+                           </div>
+                           <div>
+                              <div className="font-medium text-[#ededed]">{r.studentName}</div>
+                              <div className="text-[10px] text-[#a1a1a1] font-mono">{r.studentNo}</div>
+                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-[#a1a1a1]">
+                          {r.program} • {r.section}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-[#a1a1a1]">
+                          {r.taskTitle.substring(0, 20)}{r.taskTitle.length > 20 ? '...' : ''}
+                        </td>
+                        <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
+                          {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold text-[#ededed]">
+                          {r.creditHours}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/10 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                            {r.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end items-center gap-2">
+                            {(r.status === 'pending' || r.status === 'active') && (
+                              <button 
+                                onClick={() => {
+                                  if (!checkIsWithinSchedule(r)) {
+                                    showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                                    return;
+                                  }
+                                  if (!r.startTime) handleStartSession(r);
+                                  else handleClockOut(r);
+                                }}
+                                className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                                  r.creditHours >= 20 
+                                    ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                    : !checkIsWithinSchedule(r)
+                                      ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                      : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                }`}
+                                disabled={r.creditHours >= 20}
+                                title={
+                                  r.creditHours >= 20 
+                                    ? "Completed" 
+                                    : !checkIsWithinSchedule(r) 
+                                      ? "Outside assigned schedule" 
+                                      : (!r.startTime ? "Start Session" : "Stop Session")
+                                }
+                              >
+                                <Clock className="w-3 h-3" /> 
+                                {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}
+                              </button>
+                            )}
+                            
+                            <button onClick={() => handleEditRecord(r)} className="p-1 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDeleteRecord(r.id)} className="p-1 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
+                            <div className="w-px h-4 bg-[#2e2e2e] mx-1"></div>
+                            
+                            <button 
+                              onClick={() => handleVerify(r.id, r.status)}
+                              disabled={r.status === 'active'}
+                              className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors ${
+                                r.status === 'active' 
+                                  ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                  : r.status === 'pending' 
+                                    ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b]' 
+                                    : 'border border-[#2e2e2e] text-[#a1a1a1] hover:bg-[#262626] hover:text-[#ededed]'
+                              }`}
+                            >
+                              {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Mobile Card View */}
+              <div className="xl:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                {records.length === 0 ? (
+                  <div className="p-8 text-center text-[#a1a1a1] text-sm">No service logs submitted yet.</div>
+                ) : records.map(r => (
+                  <div key={r.id} className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded bg-[#262626] border border-[#2e2e2e] text-[#a1a1a1] text-xs flex items-center justify-center font-bold shrink-0 mt-1">
+                          {r.studentName.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-[#ededed] leading-tight break-words">{r.studentName}</div>
+                          <div className="text-[10px] text-[#a1a1a1] font-mono mt-0.5">{r.studentNo} • {r.program}/{r.section}</div>
+                          <div className="text-xs text-[#a1a1a1] font-mono mt-1 w-full truncate" title={r.taskTitle}>{r.taskTitle}</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase mb-1 ${r.status === 'verified' ? 'bg-[#3ecf8e]/10 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
                           {r.status.toUpperCase()}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end items-center gap-2">
-                          {(r.status === 'pending' || r.status === 'active') && (
-                            <button 
-                              onClick={() => {
-                                if (!checkIsWithinSchedule(r)) {
-                                  showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
-                                  return;
-                                }
-                                if (!r.startTime) handleStartSession(r);
-                                else handleClockOut(r);
-                              }}
-                              className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                                r.creditHours >= 20 
-                                  ? 'bg-gray-600 cursor-not-allowed text-white' 
-                                  : !checkIsWithinSchedule(r)
-                                    ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                    : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
-                              }`}
-                              disabled={r.creditHours >= 20}
-                              title={
-                                r.creditHours >= 20 
-                                  ? "Completed" 
-                                  : !checkIsWithinSchedule(r) 
-                                    ? "Outside assigned schedule" 
-                                    : (!r.startTime ? "Start Session" : "Stop Session")
-                              }
-                            >
-                              <Clock className="w-3 h-3" /> 
-                              {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}
-                            </button>
-                          )}
-                          
-                          <button onClick={() => handleEditRecord(r)} className="p-1 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDeleteRecord(r.id)} className="p-1 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
-                          <div className="w-px h-4 bg-[#2e2e2e] mx-1"></div>
-                          
-                          <button 
-                            onClick={() => handleVerify(r.id, r.status)}
-                            disabled={r.status === 'active'}
-                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors ${
-                              r.status === 'active' 
-                                ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                : r.status === 'pending' 
-                                  ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b]' 
-                                  : 'border border-[#2e2e2e] text-[#a1a1a1] hover:bg-[#262626] hover:text-[#ededed]'
-                            }`}
-                          >
-                            {r.status === 'verified' ? 'Unapprove' : 'Approve'}
-                          </button>
+                        <div className="flex items-center gap-1 justify-end font-bold text-[#ededed]">
+                          <Clock className="w-3.5 h-3.5 text-[#a1a1a1]" /> {r.creditHours}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-xs font-mono text-[#a1a1a1] flex justify-between">
+                      <span>{formatTime(r.timeIn)}</span>
+                      <span>—</span>
+                      <span>{formatTime(r.timeOut)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center gap-2 pt-2 border-t border-[#2e2e2e]/50">
+                      <div className="flex gap-2">
+                        <button onClick={() => handleEditRecord(r)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                      <div className="flex gap-2 flex-wrap justify-end">
+                        {(r.status === 'pending' || r.status === 'active') && (
+                          <button 
+                            onClick={() => {
+                              if (!checkIsWithinSchedule(r)) {
+                                showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                                return;
+                              }
+                              if (!r.startTime) handleStartSession(r);
+                              else handleClockOut(r);
+                            }}
+                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                              r.creditHours >= 20 
+                                ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                : !checkIsWithinSchedule(r)
+                                  ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                  : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                            }`}
+                            disabled={r.creditHours >= 20}
+                          >
+                            <Clock className="w-3 h-3" /> 
+                            {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleVerify(r.id, r.status)}
+                          disabled={r.status === 'active'}
+                          className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors ${
+                            r.status === 'active' 
+                              ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                              : r.status === 'pending' 
+                                ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b]' 
+                                : 'border border-[#2e2e2e] text-[#a1a1a1] hover:bg-[#262626] hover:text-[#ededed]'
+                          }`}
+                        >
+                          {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
           </div>
@@ -1314,67 +1436,125 @@ const handleApproveCompletion = async (student: StudentProgress) => {
               <p className="text-[#a1a1a1] text-sm mt-1">Review completed tasks and corresponding student logs.</p>
             </div>
             
-            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto w-full">
-               <table className="min-w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
-                    <tr>
-                       <th className="px-6 py-4">Task Details</th>
-                       <th className="px-6 py-4">In-Charge</th>
-                       <th className="px-6 py-4 text-center">Duration</th>
-                       <th className="px-6 py-4">Executors / Students</th>
-                       <th className="px-6 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2e2e2e]">
-                    {historyTasks.length === 0 ? (
-                      <tr><td colSpan={5} className="px-6 py-10 text-center text-[#a1a1a1]">No task history found.</td></tr>
-                    ) : historyTasks.map(t => {
-                      const executors = records.filter(r => r.taskTitle === t.title && r.date === t.date);
-                      return (
-                        <tr key={t.id} className="hover:bg-[#1c1c1c]">
-                           <td className="px-6 py-4">
-                              <div className="font-bold text-[#ededed]">{t.title}</div>
-                              <div className="text-[10px] text-[#a1a1a1] uppercase font-mono">{formatDate(t.date)}</div>
-                           </td>
-                           <td className="px-6 py-4">
-                              <div className="text-xs text-[#ededed]">{t.staffName}</div>
-                              <div className="text-[10px] text-[#a1a1a1]">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
-                           </td>
-                           <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">
-                              {t.duration?.toFixed(1)}h
-                           </td>
-                           <td className="px-6 py-4">
-                              <div className="flex -space-x-2">
-                                 {executors.slice(0, 4).map((ex, i) => (
-                                    <div key={i} className="w-7 h-7 rounded-full border border-[#171717] bg-[#2e2e2e] flex items-center justify-center text-[10px] font-bold" title={ex.studentName}>
-                                       {ex.studentName.charAt(0)}
-                                    </div>
-                                 ))}
-                                 {executors.length > 4 && (
-                                    <div className="w-7 h-7 rounded-full border border-[#171717] bg-[#3ecf8e]/20 text-[#3ecf8e] flex items-center justify-center text-[10px] font-bold">
-                                       +{executors.length - 4}
-                                    </div>
-                                 )}
-                                 {executors.length === 0 && <span className="text-[10px] italic text-[#444]">No student logs</span>}
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+               {/* Desktop View */}
+               <div className="hidden lg:block overflow-x-auto w-full">
+                 <table className="min-w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                      <tr>
+                         <th className="px-6 py-4">Task Details</th>
+                         <th className="px-6 py-4">In-Charge</th>
+                         <th className="px-6 py-4 text-center">Duration</th>
+                         <th className="px-6 py-4">Executors / Students</th>
+                         <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2e2e2e]">
+                      {historyTasks.length === 0 ? (
+                        <tr><td colSpan={5} className="px-6 py-10 text-center text-[#a1a1a1]">No task history found.</td></tr>
+                      ) : historyTasks.map(t => {
+                        const executors = records.filter(r => r.taskTitle === t.title && r.date === t.date);
+                        return (
+                          <tr key={t.id} className="hover:bg-[#1c1c1c]">
+                             <td className="px-6 py-4">
+                                <div className="font-bold text-[#ededed]">{t.title}</div>
+                                <div className="text-[10px] text-[#a1a1a1] uppercase font-mono">{formatDate(t.date)}</div>
+                             </td>
+                             <td className="px-6 py-4">
+                                <div className="text-xs text-[#ededed]">{t.staffName}</div>
+                                <div className="text-[10px] text-[#a1a1a1]">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                             </td>
+                             <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">
+                                {t.duration?.toFixed(1)}h
+                             </td>
+                             <td className="px-6 py-4">
+                                <div className="flex -space-x-2">
+                                   {executors.slice(0, 4).map((ex, i) => (
+                                      <div key={i} className="w-7 h-7 rounded-full border border-[#171717] bg-[#2e2e2e] flex items-center justify-center text-[10px] font-bold" title={ex.studentName}>
+                                         {ex.studentName.charAt(0)}
+                                      </div>
+                                   ))}
+                                   {executors.length > 4 && (
+                                      <div className="w-7 h-7 rounded-full border border-[#171717] bg-[#3ecf8e]/20 text-[#3ecf8e] flex items-center justify-center text-[10px] font-bold">
+                                         +{executors.length - 4}
+                                      </div>
+                                   )}
+                                   {executors.length === 0 && <span className="text-[10px] italic text-[#444]">No student logs</span>}
+                                </div>
+                             </td>
+                             <td className="px-6 py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                   {executors.length > 0 ? (
+                                     <span className="text-[9px] text-[#555] uppercase font-bold italic">Locked</span>
+                                   ) : (
+                                     <>
+                                       <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
+                                       <button onClick={() => handleDeleteTask(t.id)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Delete Task"><Trash2 className="w-4 h-4" /></button>
+                                     </>
+                                   )}
+                                </div>
+                             </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                 </table>
+               </div>
+               
+               {/* Mobile Card View */}
+               <div className="lg:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                 {historyTasks.length === 0 ? (
+                   <div className="p-8 text-center text-[#a1a1a1] text-sm">No task history found.</div>
+                 ) : historyTasks.map(t => {
+                   const executors = records.filter(r => r.taskTitle === t.title && r.date === t.date);
+                   return (
+                     <div key={t.id} className="p-4 space-y-3 hover:bg-[#1c1c1c] transition-colors">
+                       <div className="flex justify-between items-start gap-4">
+                         <div className="min-w-0 flex-1">
+                           <div className="font-bold text-[#ededed] break-words">{t.title}</div>
+                           <div className="text-[10px] text-[#a1a1a1] uppercase font-mono mt-0.5">{formatDate(t.date)}</div>
+                         </div>
+                         <div className="text-right shrink-0">
+                           <div className="text-xs text-[#ededed]">{t.staffName}</div>
+                           <div className="text-[10px] text-[#a1a1a1]">{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                         </div>
+                       </div>
+                       
+                       <div className="flex items-center justify-between bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                         <div className="flex items-center gap-3">
+                           <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">Duration</span>
+                           <span className="text-sm font-bold text-[#3ecf8e]">{t.duration?.toFixed(1)}h</span>
+                         </div>
+                         
+                         <div className="flex -space-x-2">
+                           {executors.slice(0, 4).map((ex, i) => (
+                              <div key={i} className="w-6 h-6 rounded-full border border-[#1c1c1c] bg-[#2e2e2e] flex items-center justify-center text-[9px] font-bold" title={ex.studentName}>
+                                 {ex.studentName.charAt(0)}
                               </div>
-                           </td>
-                           <td className="px-6 py-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                 {executors.length > 0 ? (
-                                   <span className="text-[9px] text-[#555] uppercase font-bold italic">Locked</span>
-                                 ) : (
-                                   <>
-                                     <button onClick={() => handleEditTask(t)} className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors" title="Edit Task"><Edit2 className="w-4 h-4" /></button>
-                                     <button onClick={() => handleDeleteTask(t.id)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Delete Task"><Trash2 className="w-4 h-4" /></button>
-                                   </>
-                                 )}
+                           ))}
+                           {executors.length > 4 && (
+                              <div className="w-6 h-6 rounded-full border border-[#1c1c1c] bg-[#3ecf8e]/20 text-[#3ecf8e] flex items-center justify-center text-[9px] font-bold">
+                                 +{executors.length - 4}
                               </div>
-                           </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-               </table>
+                           )}
+                           {executors.length === 0 && <span className="text-[9px] italic text-[#666]">No students</span>}
+                         </div>
+                       </div>
+                       
+                       <div className="flex justify-end pt-2 border-t border-[#2e2e2e]/50">
+                         {executors.length > 0 ? (
+                           <span className="text-[9px] text-[#555] uppercase font-bold italic">Locked</span>
+                         ) : (
+                           <div className="flex gap-2">
+                             <button onClick={() => handleEditTask(t)} className="px-3 py-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors text-xs flex items-center gap-1 font-medium"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
+                             <button onClick={() => handleDeleteTask(t.id)} className="px-3 py-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors text-xs flex items-center gap-1 font-medium"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   );
+                 })}
+               </div>
             </div>
           </div>
         )}
@@ -1407,79 +1587,146 @@ const handleApproveCompletion = async (student: StudentProgress) => {
               </div>
             </div>
 
-            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] overflow-x-auto w-full">
-               <table className="min-w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
-                    <tr>
-                       <th className="px-6 py-4">Status</th>
-                       <th className="px-6 py-4">User Details</th>
-                       <th className="px-6 py-4">System Role</th>
-                       <th className="px-6 py-4">Last Active</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2e2e2e]">
-                    {members.length === 0 ? (
-                      <tr><td colSpan={4} className="px-6 py-10 text-center text-[#a1a1a1]">No members registered yet.</td></tr>
-                    ) : members.map(m => (
-                      <tr key={m.id} className="hover:bg-[#1c1c1c]">
-                        <td className="px-6 py-4">
-                           <div className="flex items-center gap-2">
-                               <div className={`w-2 h-2 rounded-full ${Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]' : 'bg-[#a1a1a1]'}`} />
-                             <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
-                               {Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'Online' : 'Offline'}
-                             </span>
-                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                           <div className="flex items-center gap-3">
-                             {m.photoURL ? (
-                               <img src={m.photoURL} alt={m.displayName} className="w-8 h-8 rounded-full border border-[#2e2e2e]" referrerPolicy="no-referrer" />
-                             ) : (
-                               <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                 {m.displayName.charAt(0)}
-                               </div>
-                             )}
-                             <div>
-                               <div className="font-bold text-[#ededed]">{m.displayName}</div>
-                               <div className="text-[10px] text-[#a1a1a1]">{m.email}</div>
-                             </div>
-                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                           {(members.find(m => m.id === user?.uid)?.role === 'developer' || 
-                             (members.find(m => m.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
-                             <select
-                               value={m.role}
-                               onChange={async (e) => {
-                                 const newRole = e.target.value as AdminMember['role'];
-                                 try {
-                                   await updateDoc(doc(db, 'admins', m.id), { role: newRole });
-                                   setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
-                                   showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
-                                 } catch (err) {
-                                   showAlert('Error', 'Failed to update user role.', 'error');
-                                 }
-                               }}
-                               className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
-                             >
-                                <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
-                                <option value="admin" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer' && members.find(usr => usr.id === user?.uid)?.role !== 'admin'}>Administrator</option>
-                                <option value="staff">Staff/Faculty</option>
-                                <option value="student_assistant">Student Assistant</option>
-                             </select>
-                           ) : (
-                             <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
-                               {m.role?.replace('_', ' ')}
-                             </span>
-                           )}
-                        </td>
-                        <td className="px-6 py-4 text-[#a1a1a1] text-xs">
-                           {m.lastLogin ? formatDate(new Date(m.lastLogin).toISOString()) : 'Never'}
-                        </td>
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+               <div className="hidden md:block overflow-x-auto w-full">
+                 <table className="min-w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                      <tr>
+                         <th className="px-6 py-4">Status</th>
+                         <th className="px-6 py-4">User Details</th>
+                         <th className="px-6 py-4">System Role</th>
+                         <th className="px-6 py-4">Last Active</th>
                       </tr>
-                    ))}
-                  </tbody>
-               </table>
+                    </thead>
+                    <tbody className="divide-y divide-[#2e2e2e]">
+                      {members.length === 0 ? (
+                        <tr><td colSpan={4} className="px-6 py-10 text-center text-[#a1a1a1]">No members registered yet.</td></tr>
+                      ) : members.map(m => (
+                        <tr key={m.id} className="hover:bg-[#1c1c1c]">
+                          <td className="px-6 py-4">
+                             <div className="flex items-center gap-2">
+                                 <div className={`w-2 h-2 rounded-full ${Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]' : 'bg-[#a1a1a1]'}`} />
+                               <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                                 {Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'Online' : 'Offline'}
+                               </span>
+                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                             <div className="flex items-center gap-3">
+                               {m.photoURL ? (
+                                 <img src={m.photoURL} alt={m.displayName} className="w-8 h-8 rounded-full border border-[#2e2e2e]" referrerPolicy="no-referrer" />
+                               ) : (
+                                 <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                   {m.displayName.charAt(0)}
+                                 </div>
+                               )}
+                               <div>
+                                 <div className="font-bold text-[#ededed]">{m.displayName}</div>
+                                 <div className="text-[10px] text-[#a1a1a1]">{m.email}</div>
+                               </div>
+                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                             {(members.find(usr => usr.id === user?.uid)?.role === 'developer' || 
+                               (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
+                               <select
+                                 value={m.role}
+                                 onChange={async (e) => {
+                                   const newRole = e.target.value as AdminMember['role'];
+                                   try {
+                                     await updateDoc(doc(db, 'admins', m.id), { role: newRole });
+                                     setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
+                                     showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
+                                   } catch (err) {
+                                     showAlert('Error', 'Failed to update user role.', 'error');
+                                   }
+                                 }}
+                                 className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
+                               >
+                                  <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
+                                  <option value="admin" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer' && members.find(usr => usr.id === user?.uid)?.role !== 'admin'}>Administrator</option>
+                                  <option value="staff">Staff/Faculty</option>
+                                  <option value="student_assistant">Student Assistant</option>
+                               </select>
+                             ) : (
+                               <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
+                                 {m.role?.replace('_', ' ')}
+                               </span>
+                             )}
+                          </td>
+                          <td className="px-6 py-4 text-[#a1a1a1] text-xs">
+                             {m.lastLogin ? formatDate(new Date(m.lastLogin).toISOString()) : 'Never'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                 </table>
+               </div>
+               
+               {/* Mobile Card View */}
+               <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                 {members.length === 0 ? (
+                   <div className="p-8 text-center text-[#a1a1a1] text-sm">No members registered yet.</div>
+                 ) : members.map(m => (
+                   <div key={m.id} className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors">
+                     <div className="flex justify-between items-start gap-4">
+                       <div className="flex items-center gap-3 overflow-hidden">
+                         {m.photoURL ? (
+                           <img src={m.photoURL} alt={m.displayName} className="w-10 h-10 rounded-full border border-[#2e2e2e] shrink-0" referrerPolicy="no-referrer" />
+                         ) : (
+                           <div className="w-10 h-10 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1] shrink-0">
+                             {m.displayName.charAt(0)}
+                           </div>
+                         )}
+                         <div className="min-w-0">
+                           <div className="font-bold text-[#ededed] truncate">{m.displayName}</div>
+                           <div className="text-[10px] text-[#a1a1a1] truncate">{m.email}</div>
+                         </div>
+                       </div>
+                       <div className="flex flex-col items-end shrink-0 gap-1">
+                         <div className="flex items-center gap-1.5">
+                           <div className={`w-1.5 h-1.5 rounded-full ${Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]' : 'bg-[#a1a1a1]'}`} />
+                           <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
+                             {Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'Online' : 'Offline'}
+                           </span>
+                         </div>
+                         <div className="text-[9px] text-[#666]">
+                           {m.lastLogin ? formatDate(new Date(m.lastLogin).toISOString()) : 'Never'}
+                         </div>
+                       </div>
+                     </div>
+                     <div className="flex justify-between flex-wrap gap-2 items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                       <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">System Role</span>
+                       {(members.find(usr => usr.id === user?.uid)?.role === 'developer' || 
+                         (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
+                         <select
+                           value={m.role}
+                           onChange={async (e) => {
+                             const newRole = e.target.value as AdminMember['role'];
+                             try {
+                               await updateDoc(doc(db, 'admins', m.id), { role: newRole });
+                               setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
+                               showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
+                             } catch (err) {
+                               showAlert('Error', 'Failed to update user role.', 'error');
+                             }
+                           }}
+                           className="bg-[#171717] border border-[#3e3e3e] rounded text-xs px-2 py-1.5 outline-none focus:border-[#3ecf8e] text-[#ededed] max-w-[140px]"
+                         >
+                            <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
+                            <option value="admin" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer' && members.find(usr => usr.id === user?.uid)?.role !== 'admin'}>Administrator</option>
+                            <option value="staff">Staff/Faculty</option>
+                            <option value="student_assistant">Student Assistant</option>
+                         </select>
+                       ) : (
+                         <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
+                           {m.role?.replace('_', ' ')}
+                         </span>
+                       )}
+                     </div>
+                   </div>
+                 ))}
+               </div>
             </div>
           </div>
         )}
