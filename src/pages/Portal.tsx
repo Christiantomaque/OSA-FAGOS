@@ -26,6 +26,10 @@ import SignatureCanvas from 'react-signature-canvas';
 import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
+// --- Image Imports ---
+import cdmLogo from '../logo/images/cdmlogo.png';
+import osaLogo from '../logo/images/osalogo.png';
+
 // --- Types ---
 type Task = {
   id: string;
@@ -53,11 +57,13 @@ export default function Portal() {
   const [claimedTaskIds, setClaimedTaskIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isBracketOpen, setIsBracketOpen] = useState(false);
+  
   const sigPad = useRef<SignatureCanvas>(null);
   const { modal, showAlert, hideAlert } = useAlert();
-  
+
   const currentYear = new Date().getFullYear();
   const academicYear = `${currentYear} - ${currentYear + 1}`;
 
@@ -66,12 +72,12 @@ export default function Portal() {
       semester: '1st Semester'
     }
   });
-  
+
   const watchTaskId = watch("taskId");
 
   // --- Real-Time Data Sync ---
   useEffect(() => {
-    // 1. Real-time listener for Tasks (Using :any to clear TS errors)
+    // 1. Real-time listener for Tasks
     const unsubTasks = onSnapshot(
       query(collection(db, 'tasks'), orderBy('date', 'desc')), 
       (snapshot: any) => {
@@ -178,67 +184,128 @@ export default function Portal() {
   return (
     <div className="min-h-screen bg-[#1c1c1c] text-[#ededed] font-sans sm:p-6 lg:p-8 flex justify-center pb-20">
       <div className="max-w-3xl w-full bg-[#171717] border border-[#2e2e2e] sm:rounded-lg overflow-hidden mt-4 shadow-xl">
-        
-        {/* Header Section */}
-        <div className="border-b border-[#2e2e2e] bg-[#1c1c1c] p-6 sm:p-10 text-center">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#ededed] uppercase">Colegio de Muntinlupa</h1>
-          <p className="text-sm font-medium tracking-wide text-[#a1a1a1] mt-1 uppercase">The Home of Future Engineers and Architects</p>
-          <div className="my-4 h-px w-16 bg-[#3ecf8e] mx-auto rounded-full"></div>
-          <h2 className="text-md sm:text-lg text-[#3ecf8e] font-semibold uppercase">Office of Student Affairs</h2>
-          <h3 className="text-lg sm:text-xl font-bold text-[#ededed] mt-2">SERVICE OBLIGATION COMPLETION FORM</h3>
+
+        {/* --- HEADER SECTION --- */}
+        <div className="border-b border-[#2e2e2e] bg-[#1c1c1c] p-6 sm:p-10">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 max-w-2xl mx-auto">
+            <img src={cdmLogo} alt="CDM Logo" className="w-12 h-12 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md" />
+            
+            <div className="text-center flex-1">
+              <h1 className="text-base sm:text-2xl font-bold tracking-tight text-[#ededed] uppercase leading-tight">Colegio de Muntinlupa</h1>
+              <p className="text-[9px] sm:text-xs font-medium tracking-wide text-[#a1a1a1] mt-1 uppercase">The Home of Future Engineers and Architects</p>
+              <div className="my-3 sm:my-4 h-px w-16 bg-[#3ecf8e] mx-auto rounded-full"></div>
+              <h2 className="text-xs sm:text-md text-[#3ecf8e] font-semibold uppercase">Office of Student Affairs</h2>
+              <h3 className="text-sm sm:text-lg font-bold text-[#ededed] mt-1 sm:mt-2">SERVICE OBLIGATION COMPLETION FORM</h3>
+            </div>
+
+            <img src={osaLogo} alt="OSA Logo" className="w-12 h-12 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md" />
+          </div>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 sm:p-10 space-y-8">
-          
-          {/* Student Info */}
+
+          {/* --- STUDENT INFO --- */}
           <div>
             <h4 className="text-sm font-semibold text-[#ededed] uppercase tracking-wider mb-4 border-b border-[#2e2e2e] pb-2 flex items-center gap-2">
               <KeySquare className="w-4 h-4 text-[#3ecf8e]" />
               Student Information
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Full Name</label>
                 <input {...register("studentName", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="Last Name, First Name M.I." />
               </div>
+              
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Student No.</label>
-                <input {...register("studentNo", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. 20210001" />
+                <input 
+                  {...register("studentNo", { required: true })} 
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, '');
+                  }}
+                  inputMode="numeric"
+                  className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" 
+                  placeholder="e.g. 20210001" 
+                />
               </div>
+              
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Email Address</label>
                 <input type="email" {...register("studentEmail", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="name@example.com" />
               </div>
+              
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Program</label>
                 <input {...register("program", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. BSIT" />
               </div>
+              
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Section</label>
                 <input {...register("section", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. 1E4" />
               </div>
+              
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Scholarship Bracket</label>
-                <select {...register("bracket", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none">
-                  <option value="">-- Select Bracket --</option>
-                  <option value="BRACKET A">BRACKET A</option>
-                  <option value="BRACKET B">BRACKET B</option>
-                  <option value="BRACKET C">BRACKET C</option>
-                </select>
+                <Controller
+                  name="bracket"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsBracketOpen(!isBracketOpen)}
+                        className="w-full text-left text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none flex items-center justify-between transition-colors hover:border-[#3e3e3e]"
+                      >
+                        <span className={!field.value ? 'text-[#a1a1a1]/50' : 'text-[#ededed]'}>
+                          {field.value || "-- Select Bracket --"}
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-[#a1a1a1] transition-transform duration-200 ${isBracketOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      <AnimatePresence>
+                        {isBracketOpen && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setIsBracketOpen(false)} />
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              className="absolute z-20 left-0 right-0 mt-2 bg-[#171717] border border-[#2e2e2e] rounded-lg shadow-2xl overflow-hidden"
+                            >
+                              {["BRACKET A", "BRACKET B", "BRACKET C"].map((bracket) => (
+                                <button
+                                  key={bracket}
+                                  type="button"
+                                  onClick={() => { field.onChange(bracket); setIsBracketOpen(false); }}
+                                  className="w-full text-left px-4 py-3 hover:bg-[#3ecf8e]/10 border-b border-[#2e2e2e] last:border-0 text-sm font-medium text-[#ededed] hover:text-[#3ecf8e] transition-colors"
+                                >
+                                  {bracket}
+                                </button>
+                              ))}
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                />
               </div>
+
             </div>
           </div>
 
-          {/* Task Dropdown Selection */}
+          {/* --- TASK SELECTION --- */}
           <div className="pt-2">
             <h4 className="text-sm font-semibold text-[#ededed] uppercase tracking-wider mb-4 border-b border-[#2e2e2e] pb-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#3ecf8e]" />
               Service Selection
             </h4>
-            
+
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Select Daily Task Activity</label>
-              
+
               <Controller
                 name="taskId"
                 control={control}
@@ -317,7 +384,7 @@ export default function Portal() {
             )}
           </div>
 
-          {/* Signature Canvas */}
+          {/* --- SIGNATURE CANVAS --- */}
           <div className="pt-2">
             <div className="flex justify-between items-center mb-2">
               <label className="text-xs font-semibold uppercase tracking-wide text-[#ededed] flex items-center gap-2">
@@ -329,15 +396,16 @@ export default function Portal() {
               </button>
             </div>
             <div className="bg-white rounded-lg overflow-hidden h-32 md:h-40 border-2 border-[#2e2e2e] focus-within:border-[#3ecf8e] transition-all">
-  <SignatureCanvas 
-    ref={sigPad}
-    penColor="black" 
-    backgroundColor="white"
-    canvasProps={{ className: 'w-full h-full cursor-crosshair' }} 
-  />
-</div>
+              <SignatureCanvas 
+                ref={sigPad}
+                penColor="black" 
+                backgroundColor="white"
+                canvasProps={{ className: 'w-full h-full cursor-crosshair' }} 
+              />
+            </div>
           </div>
 
+          {/* --- FOOTER --- */}
           <div className="pt-6 border-t border-[#2e2e2e] flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <a href="/admin" className="text-[10px] uppercase font-bold text-[#3ecf8e] hover:text-[#ededed] tracking-widest transition-colors border border-[#3ecf8e]/20 px-3 py-1.5 rounded-md bg-[#3ecf8e]/5">Admin Login</a>
