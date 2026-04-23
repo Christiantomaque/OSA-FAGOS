@@ -84,6 +84,7 @@ type CompletionApproval = {
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [records, setRecords] = useState<ServiceRecord[]>([]);
@@ -146,7 +147,9 @@ export default function Admin() {
           }
 
           // Strict Role Check for Admin Dashboard
-          if (userRole !== 'developer' && userRole !== 'admin') {
+          if (userRole === 'admin' || userRole === 'developer') {
+            setAuthorized(true);
+          } else {
             showAlert(
               "Access Restricted",
               "You do not have the required permissions to access the Admin Dashboard. Only Developers and Administrators can access this portal.",
@@ -788,7 +791,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     m.role.toLowerCase().includes(membersSearch.toLowerCase())
   );
 
-  if (loadingAuth) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
+  if (loadingAuth || !authorized) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -802,7 +805,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
           <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
             <LayoutDashboard className="w-4 h-4 text-black" />
           </div>
-          OSA Dashboard
+          Admin Portal
         </div>
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-[#ededed]">
           {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -874,14 +877,6 @@ const handleApproveCompletion = async (student: StudentProgress) => {
             <span className="text-sm font-medium">Settings</span>
           </button>
           <div className="pt-4 mt-4 border-t border-[#2e2e2e]">
-             <Link 
-              to="/staff"
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-[#a1a1a1] hover:bg-[#2e2e2e] hover:text-[#ededed] group transition-colors"
-            >
-              <Users className="w-4 h-4 group-hover:text-[#3ecf8e]" />
-              <span className="text-sm font-medium">Switch to Staff Portal</span>
-              <ChevronRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
           </div>
         </nav>
         <div className="p-4 border-t border-[#2e2e2e]">

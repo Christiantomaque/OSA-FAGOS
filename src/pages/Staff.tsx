@@ -59,6 +59,7 @@ type AdminMember = {
 export default function Staff() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -68,6 +69,7 @@ export default function Staff() {
   const [submittingTask, setSubmittingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskSearch, setTaskSearch] = useState('');
+  const [recordsSearch, setRecordsSearch] = useState('');
   const [editingRecord, setEditingRecord] = useState<ServiceRecord | null>(null);
   const [staffOption, setStaffOption] = useState<'me' | 'other'>('me');
   const [savingSignature, setSavingSignature] = useState(false);
@@ -108,7 +110,9 @@ export default function Staff() {
           }
 
           // Strict Role Check for Staff Portal
-          if (userRole !== 'staff' && userRole !== 'student_assistant' && userRole !== 'developer' && userRole !== 'admin') {
+          if (userRole === 'staff' || userRole === 'student_assistant' || userRole === 'developer' || userRole === 'admin') {
+            setAuthorized(true);
+          } else {
             showAlert(
               "Access Restricted",
               "You do not have the required permissions to access the Staff Portal. Please contact an administrator if you believe this is an error.",
@@ -424,7 +428,7 @@ export default function Staff() {
   const activeTasks = tasks.filter(t => t.date >= getTodayYYYYMMDD());
   const historyTasks = tasks.filter(t => t.date < getTodayYYYYMMDD());
 
-  if (loadingAuth) return <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
+  if (loadingAuth || !authorized) return <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -613,6 +617,16 @@ export default function Staff() {
         {tab === 'records' && (
           <div className="space-y-6">
             <h2 className="text-xl font-bold">Approve Student Logs</h2>
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a1a1a1]" />
+              <input 
+                type="text" 
+                placeholder="Search logs..." 
+                value={recordsSearch}
+                onChange={(e) => setRecordsSearch(e.target.value)}
+                className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-xs focus:border-[#3ecf8e] outline-none"
+              />
+            </div>
 
             {editingRecord && (
               <div className="bg-[#171717] border border-amber-500/50 p-6 rounded-xl space-y-4">
@@ -682,7 +696,15 @@ export default function Staff() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#2e2e2e]">
-                    {records.length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-[#a1a1a1]">No records found</td></tr> : records.map(r => (
+                    {records.filter(r => 
+                      r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                      r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                      r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
+                    ).length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-[#a1a1a1]">No records found</td></tr> : records.filter(r => 
+                      r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                      r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                      r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
+                    ).map(r => (
                       <tr key={r.id} className="hover:bg-[#1c1c1c]">
                         <td className="px-6 py-4">
                           <div className="font-bold">{r.studentName}</div>
