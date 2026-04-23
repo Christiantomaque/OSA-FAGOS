@@ -219,7 +219,12 @@ export default function Portal() {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Scholarship Bracket</label>
-                <input {...register("bracket", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none" placeholder="e.g. BRACKET A" />
+                <select {...register("bracket", { required: true })} className="w-full text-sm bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:border-[#3ecf8e] outline-none">
+                  <option value="">-- Select Bracket --</option>
+                  <option value="BRACKET A">BRACKET A</option>
+                  <option value="BRACKET B">BRACKET B</option>
+                  <option value="BRACKET C">BRACKET C</option>
+                </select>
               </div>
             </div>
           </div>
@@ -333,15 +338,18 @@ export default function Portal() {
 </div>
           </div>
 
-          <div className="pt-6 border-t border-[#2e2e2e] flex items-center justify-between">
-            <a href="/admin" className="text-[10px] uppercase font-bold text-[#a1a1a1] hover:text-[#ededed] tracking-widest transition-colors">Admin Login</a>
-            <button 
-              disabled={submitting || !selectedTask}
-              className="bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-30 disabled:cursor-not-allowed text-black text-sm font-bold px-8 py-3 rounded-md transition-all flex items-center gap-2 shadow-lg shadow-[#3ecf8e]/10"
-            >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Submit Log Record
-            </button>
+          <div className="pt-6 border-t border-[#2e2e2e] flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <a href="/admin" className="text-[10px] uppercase font-bold text-[#3ecf8e] hover:text-[#ededed] tracking-widest transition-colors border border-[#3ecf8e]/20 px-3 py-1.5 rounded-md bg-[#3ecf8e]/5">Admin Login</a>
+              <button 
+                disabled={submitting || !selectedTask}
+                className="bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-30 disabled:cursor-not-allowed text-black text-sm font-bold px-8 py-3 rounded-md transition-all flex items-center gap-2 shadow-lg shadow-[#3ecf8e]/10"
+              >
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Submit Log Record
+              </button>
+            </div>
+            <p className="text-[9px] text-[#666] text-center italic">Report bugs to: tomaque.christian.a.220@cdm.edu.ph</p>
           </div>
         </form>
       </div>

@@ -1334,10 +1334,11 @@ const handleApproveCompletion = async (student: StudentProgress) => {
 
                     <div className="flex justify-between items-center gap-2 pt-2 border-t border-[#2e2e2e]/50">
                       <div className="flex gap-2">
-                        <button onClick={() => handleEditRecord(r)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => handleEditRecord(r)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-amber-500" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-red-500" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
-                      <div className="flex gap-2 flex-wrap justify-end">
+                      
+                      <div className="flex gap-2">
                         {(r.status === 'pending' || r.status === 'active') && (
                           <button 
                             onClick={() => {
@@ -1348,31 +1349,30 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               if (!r.startTime) handleStartSession(r);
                               else handleClockOut(r);
                             }}
-                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                            className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded ${
                               r.creditHours >= 20 
-                                ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                ? 'bg-gray-600' 
                                 : !checkIsWithinSchedule(r)
-                                  ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                  : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                  ? 'bg-[#2e2e2e] text-[#666]'
+                                  : !r.startTime ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
                             }`}
                             disabled={r.creditHours >= 20}
                           >
-                            <Clock className="w-3 h-3" /> 
-                            {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}
+                            {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start' : 'Stop')}
                           </button>
                         )}
                         <button 
-                          onClick={() => handleVerify(r.id, r.status)}
-                          disabled={r.status === 'active'}
-                          className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors ${
-                            r.status === 'active' 
-                              ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
-                              : r.status === 'pending' 
-                                ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b]' 
-                                : 'border border-[#2e2e2e] text-[#a1a1a1] hover:bg-[#262626] hover:text-[#ededed]'
-                          }`}
+                           onClick={() => handleVerify(r.id, r.status)}
+                           disabled={r.status === 'active'}
+                           className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded ${
+                             r.status === 'active' 
+                               ? 'border border-[#2e2e2e] text-[#666]'
+                               : r.status === 'pending' 
+                                 ? 'bg-[#3ecf8e] text-black' 
+                                 : 'border border-[#2e2e2e] text-[#a1a1a1]'
+                           }`}
                         >
-                          {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                           {r.status === 'verified' ? 'Unapprove' : 'Approve'}
                         </button>
                       </div>
                     </div>
