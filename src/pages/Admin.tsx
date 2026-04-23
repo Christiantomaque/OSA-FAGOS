@@ -891,9 +891,6 @@ const handleApproveCompletion = async (student: StudentProgress) => {
       <main className="flex-1 flex flex-col min-w-0 bg-[#1c1c1c]">
         <header className="sticky top-0 z-30 bg-[#171717] border-b border-[#2e2e2e] p-4 md:px-8 md:py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
            <div className="flex items-center gap-3">
-              <div className="md:hidden w-8 h-8 bg-[#3ecf8e] rounded flex items-center justify-center">
-                 <LayoutDashboard className="w-5 h-5 text-black" />
-              </div>
               <h1 className="text-lg md:text-xl font-bold tracking-tight text-[#ededed]">
                 {tab === 'tasks' && 'Schedule Management'}
                 {tab === 'records' && 'Service Records'}
