@@ -844,97 +844,187 @@ export default function Staff() {
                 </form>
               </div>
             )}
-            <div className="border border-[#2e2e2e] rounded-xl overflow-hidden bg-[#171717] overflow-x-auto w-full">
-               <table className="min-w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-[#262626] text-[#a1a1a1] text-[10px] uppercase font-bold tracking-widest border-b border-[#2e2e2e]">
-                    <tr>
-                       <th className="px-6 py-4">Student Info</th>
-                       <th className="px-6 py-4 text-center">Hours</th>
-                       <th className="px-6 py-4">Assigned Task</th>
-                       <th className="px-6 py-4 text-center">Status</th>
-                       <th className="px-6 py-4 text-right">Verification</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2e2e2e]">
-                    {records.filter(r => 
-                      r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
-                      r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
-                      r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
-                    ).length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-[#a1a1a1]">No records found</td></tr> : records.filter(r => 
-                      r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
-                      r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
-                      r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
-                    ).map(r => (
-                      <tr key={r.id} className="hover:bg-[#1c1c1c]">
-                        <td className="px-6 py-4">
-                          <div className="font-bold">{r.studentName}</div>
-                          <div className="text-[10px] text-[#a1a1a1]">{r.studentNo} | {r.program}</div>
-                        </td>
-                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">{r.creditHours}</td>
-                        <td className="px-6 py-4">
-                           <div className="text-xs">{r.taskTitle}</div>
-                           <div className="text-[9px] text-[#a1a1a1] font-mono uppercase">{formatDate(r.date)}</div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                           <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                             {r.status}
-                           </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end items-center gap-3">
-                            <div className="flex gap-1 pr-2 border-r border-[#2e2e2e]">
-                              {(r.status === 'pending' || r.status === 'active') && (
-                                <button 
-                                  onClick={() => {
-                                    if (!checkIsWithinSchedule(r)) {
-                                      showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
-                                      return;
-                                    }
-                                    if (!r.startTime) handleStartSession(r);
-                                    else handleClockOut(r);
-                                  }}
-                                  className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                                    r.creditHours >= 20 
-                                      ? 'bg-gray-600 cursor-not-allowed text-white' 
-                                      : !checkIsWithinSchedule(r)
-                                        ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                        : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
-                                  }`}
-                                  disabled={r.creditHours >= 20}
-                                  title={
-                                    r.creditHours >= 20 
-                                      ? "Completed" 
-                                      : !checkIsWithinSchedule(r) 
-                                        ? "Outside assigned schedule" 
-                                        : (!r.startTime ? "Start Session" : "Stop Session")
-                                  }
-                                >
-                                  <Clock className="w-3.5 h-3.5" />
-                                  <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}</span>
-                                </button>
-                              )}
-                              <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                            <button 
-                              onClick={() => handleVerify(r.id, r.status)} 
-                              disabled={r.status === 'active'}
-                              className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${
-                                r.status === 'active' 
-                                  ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                  : r.status === 'pending' 
-                                    ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' 
-                                    : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'
-                              }`}
-                            >
-                               {r.status === 'verified' ? 'Unapprove' : 'Approve'}
-                            </button>
-                          </div>
-                        </td>
+            <div className="border border-[#2e2e2e] rounded-xl overflow-hidden bg-[#171717] w-full">
+               {/* Desktop View */}
+               <div className="hidden lg:block overflow-x-auto w-full">
+                 <table className="min-w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-[#262626] text-[#a1a1a1] text-[10px] uppercase font-bold tracking-widest border-b border-[#2e2e2e]">
+                      <tr>
+                         <th className="px-6 py-4">Student Info</th>
+                         <th className="px-6 py-4 text-center">Hours</th>
+                         <th className="px-6 py-4">Assigned Task</th>
+                         <th className="px-6 py-4 text-center">Status</th>
+                         <th className="px-6 py-4 text-right">Verification</th>
                       </tr>
-                    ))}
-                  </tbody>
-               </table>
+                    </thead>
+                    <tbody className="divide-y divide-[#2e2e2e]">
+                      {records.filter(r => 
+                        r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                        r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                        r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
+                      ).length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-[#a1a1a1]">No records found</td></tr> : records.filter(r => 
+                        r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                        r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                        r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
+                      ).map(r => (
+                        <tr key={r.id} className="hover:bg-[#1c1c1c]">
+                          <td className="px-6 py-4">
+                            <div className="font-bold">{r.studentName}</div>
+                            <div className="text-[10px] text-[#a1a1a1]">{r.studentNo} | {r.program}</div>
+                          </td>
+                          <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">{r.creditHours}</td>
+                          <td className="px-6 py-4">
+                             <div className="text-xs">{r.taskTitle}</div>
+                             <div className="text-[9px] text-[#a1a1a1] font-mono uppercase">{formatDate(r.date)}</div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                             <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                               {r.status}
+                             </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end items-center gap-3">
+                              <div className="flex gap-1 pr-2 border-r border-[#2e2e2e]">
+                                {(r.status === 'pending' || r.status === 'active') && (
+                                  <button 
+                                    onClick={() => {
+                                      if (!checkIsWithinSchedule(r)) {
+                                        showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                                        return;
+                                      }
+                                      if (!r.startTime) handleStartSession(r);
+                                      else handleClockOut(r);
+                                    }}
+                                    className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                                      r.creditHours >= 20 
+                                        ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                        : !checkIsWithinSchedule(r)
+                                          ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                          : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                    }`}
+                                    disabled={r.creditHours >= 20}
+                                    title={
+                                      r.creditHours >= 20 
+                                        ? "Completed" 
+                                        : !checkIsWithinSchedule(r) 
+                                          ? "Outside assigned schedule" 
+                                          : (!r.startTime ? "Start Session" : "Stop Session")
+                                    }
+                                  >
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}</span>
+                                  </button>
+                                )}
+                                <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                              <button 
+                                onClick={() => handleVerify(r.id, r.status)} 
+                                disabled={r.status === 'active'}
+                                className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${
+                                  r.status === 'active' 
+                                    ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                    : r.status === 'pending' 
+                                      ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' 
+                                      : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'
+                                }`}
+                              >
+                                 {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                 </table>
+               </div>
+               
+               {/* Mobile View */}
+               <div className="lg:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                 {records.filter(r => 
+                    r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                    r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                    r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
+                  ).length === 0 ? (
+                    <div className="p-8 text-center text-[#a1a1a1] text-sm">No records found.</div>
+                  ) : records.filter(r => 
+                    r.studentName.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                    r.studentNo.toLowerCase().includes(recordsSearch.toLowerCase()) || 
+                    r.taskTitle.toLowerCase().includes(recordsSearch.toLowerCase())
+                  ).map(r => (
+                    <div key={r.id} className="p-4 space-y-3 hover:bg-[#1c1c1c] transition-colors">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                             <div className="font-bold text-[#ededed] truncate">{r.studentName}</div>
+                             <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0 ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                               {r.status}
+                             </span>
+                          </div>
+                          <div className="text-[10px] text-[#a1a1a1] mt-0.5">{r.studentNo} | {r.program}</div>
+                        </div>
+                        <div className="text-right shrink-0 font-bold text-[#3ecf8e] text-lg">
+                          {r.creditHours}h
+                        </div>
+                      </div>
+                      
+                      <div className="bg-[#262626] rounded-md p-3">
+                         <div className="text-xs font-medium text-[#ededed] truncate">{r.taskTitle}</div>
+                         <div className="text-[9px] text-[#a1a1a1] font-mono uppercase mt-0.5">{formatDate(r.date)}</div>
+                      </div>
+
+                      <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">
+                        <div className="flex gap-1">
+                          {(r.status === 'pending' || r.status === 'active') && (
+                            <button 
+                              onClick={() => {
+                                if (!checkIsWithinSchedule(r)) {
+                                  showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                                  return;
+                                }
+                                if (!r.startTime) handleStartSession(r);
+                                else handleClockOut(r);
+                              }}
+                              className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                                r.creditHours >= 20 
+                                  ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                  : !checkIsWithinSchedule(r)
+                                    ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                    : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}
+                              disabled={r.creditHours >= 20}
+                              title={
+                                r.creditHours >= 20 
+                                  ? "Completed" 
+                                  : !checkIsWithinSchedule(r) 
+                                    ? "Outside assigned schedule" 
+                                    : (!r.startTime ? "Start Session" : "Stop Session")
+                              }
+                            >
+                              <Clock className="w-3.5 h-3.5" />
+                              <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start' : 'Stop')}</span>
+                            </button>
+                          )}
+                          <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                        <button 
+                          onClick={() => handleVerify(r.id, r.status)} 
+                          disabled={r.status === 'active'}
+                          className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${
+                            r.status === 'active' 
+                              ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                              : r.status === 'pending' 
+                                ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' 
+                                : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'
+                          }`}
+                        >
+                           {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+               </div>
             </div>
           </div>
         )}
