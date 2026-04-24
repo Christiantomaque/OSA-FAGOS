@@ -2,53 +2,65 @@ import { useState, useEffect } from 'react';
 import { HelpCircle, Play, BookOpen, X } from 'lucide-react';
 import { Joyride } from 'react-joyride';
 import type { Step, EventData } from 'react-joyride';
+import { useLocation } from 'react-router-dom';
 
 export function HelpGuide() {
   const [isOpen, setIsOpen] = useState(false);
   const [runTour, setRunTour] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const location = useLocation();
+
+  const isPortal = location.pathname === '/';
 
   // Dynamic steps based on what's available in the DOM
   const [steps, setSteps] = useState<Step[]>([]);
 
   useEffect(() => {
-    // Basic tour steps that apply generally
-    const tSteps: Step[] = [
-      {
-        target: 'body',
-        content: 'Welcome to the OSA Task Management System! Let us quickly show you around.',
-        placement: 'center',
-        skipBeacon: true,
+    let tSteps: Step[] = [];
+
+    if (isPortal) {
+      tSteps = [
+        {
+          target: 'body',
+          content: 'Welcome to the OSA Task Management Portal! This is where students sign up for daily tasks.',
+          placement: 'center',
+          skipBeacon: true,
+        },
+        {
+          target: '.student-portal-board',
+          content: 'This main board contains the form to sign up for a physical service task.',
+          placement: 'top',
+        }
+      ];
+    } else {
+      tSteps = [
+        {
+          target: 'body',
+          content: 'Welcome to the System Dashboard! Let us quickly show you around your workspace.',
+          placement: 'center',
+          skipBeacon: true,
+        }
+      ];
+
+      if (document.querySelector('.system-sidebar') || document.querySelector('aside')) {
+          tSteps.push({
+              target: document.querySelector('.system-sidebar') ? '.system-sidebar' : 'aside',
+              content: 'This sidebar lets you navigate through your available tools like Tasks, Approval Logs, and Members.',
+              placement: 'right',
+          });
       }
-    ];
 
-    if (document.querySelector('.system-sidebar') || document.querySelector('aside')) {
-        tSteps.push({
-            target: document.querySelector('.system-sidebar') ? '.system-sidebar' : 'aside',
-            content: 'This sidebar lets you navigate through Tasks, Approval Logs, History, and Members.',
-            placement: 'right',
-        });
-    }
-
-    if (document.querySelector('main')) {
-        tSteps.push({
-            target: 'main',
-            content: 'This is the main workspace area where your data and forms appear.',
-            placement: 'left',
-        });
-    }
-
-    // Portal specific
-    if (document.querySelector('.student-portal-board')) {
-        tSteps.push({
-            target: '.student-portal-board',
-            content: 'This board shows all the available tasks. Select one you want to sign up for!',
-            placement: 'top',
-        });
+      if (document.querySelector('main')) {
+          tSteps.push({
+              target: 'main',
+              content: 'This is the main workspace area where your data and forms appear.',
+              placement: 'left',
+          });
+      }
     }
 
     setSteps(tSteps);
-  }, [runTour]);
+  }, [runTour, isPortal]);
 
   return (
     <>
@@ -74,7 +86,7 @@ export function HelpGuide() {
                 <HelpCircle className="w-6 h-6" />
               </div>
               <h3 className="text-lg font-bold text-white">How can we help?</h3>
-              <p className="text-xs text-[#a1a1a1]">Get familiar with the system through an interactive tour or our written guide.</p>
+              <p className="text-xs text-[#a1a1a1]">Get familiar with the {isPortal ? 'Portal' : 'Dashboard'} through an interactive tour or our written guide.</p>
             </div>
             
             <div className="space-y-3">
@@ -124,46 +136,63 @@ export function HelpGuide() {
                <h2 className="text-xl font-bold flex items-center gap-2 text-[#3ecf8e]">
                  <BookOpen className="w-5 h-5" /> OSA System Reference Guide
                </h2>
-               <p className="text-xs text-[#a1a1a1] mt-1">Version 1.0 • Task & Hours Management</p>
+               <p className="text-xs text-[#a1a1a1] mt-1">{isPortal ? 'Portal Instructions' : 'Dashboard Workflow & Management'}</p>
             </div>
             <div className="p-6 overflow-y-auto space-y-8 text-sm custom-scrollbar">
-                <section>
-                    <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">1. Overview</h3>
-                    <p className="text-[#a1a1a1] leading-relaxed">The system centralizes service task allocation, student assistant logs, and hours tracking. It maintains schedules, credits, and verification seamlessly to replace manual paperwork.</p>
-                </section>
-                <section>
-                    <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">2. Assigning Tasks (Staff/Admin)</h3>
-                    <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
-                        <li>Navigate to the <strong className="text-white">Tasks</strong> tab and utilize the Assign Task form.</li>
-                        <li>Input Date, Time Window, and Capacity (number of students needed).</li>
-                        <li><span className="text-amber-500">Important:</span> The time window defined strictly enforces the period students can physically clock in or out. Logs cannot be started outside of their scheduled block.</li>
-                    </ul>
-                </section>
-                <section>
-                    <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">3. Managing Logs & Time Tracking</h3>
-                    <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
-                        <li>Students must physically check-in via the <strong>Public Portal</strong> first to pre-record their service slot for the day.</li>
-                        <li>Once they report to you in person, locate them on your <strong className="text-white">Approve Logs</strong> tab. Click the blue <strong className="text-white bg-blue-500/20 px-1 py-0.5 rounded text-[10px]">Start Now</strong> button to activate their timer.</li>
-                        <li>When their service is complete, click the red <strong className="text-white bg-red-500/20 px-1 py-0.5 rounded text-[10px]">Stop Time</strong> button.</li>
-                        <li>Hours are automatically calculated based on the precise start and end times recorded by the system, capped universally at 20 hours.</li>
-                        <li>If a shift exceeds the scheduled end time without administrative action, <strong className="text-white">Late Penalty</strong> deductions automatically cap their credit to the scheduled bound.</li>
-                    </ul>
-                </section>
-                <section>
-                    <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">4. Verification & Digital Signatures</h3>
-                    <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
-                        <li>When a shift physically concludes (Status: Pending), you must officially <strong className="text-white">Approve</strong> it to reflect in the final tally.</li>
-                        <li>Approval permanently attaches your digital signature to their record for official auditing.</li>
-                        <li>You can draw or upload your signature via the <strong className="text-white">Settings</strong> tab.</li>
-                    </ul>
-                </section>
-                <section>
-                    <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">5. Student Portal Registration</h3>
-                    <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
-                        <li>The Student Portal is the landing page. Students browse available tasks published by staff for today or future dates.</li>
-                        <li>Upon selecting a task, they must provide their Student ID, Name, Program, and trace an e-signature to complete sign-up.</li>
-                    </ul>
-                </section>
+              {isPortal ? (
+                <>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">1. Welcome to the Portal</h3>
+                      <p className="text-[#a1a1a1] leading-relaxed">The Student Portal is the public landing page. Students browse available tasks published by staff for today or future dates.</p>
+                  </section>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">2. Signing up for a Task</h3>
+                      <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
+                          <li>Select an available task from the dropdown menu. Ensure the date and time fit your schedule.</li>
+                          <li>Fill in your Student ID, Full Name, and Program.</li>
+                          <li>Provide your digital signature in the pad provided.</li>
+                          <li>Click <strong className="text-white bg-green-500/20 px-1 py-0.5 rounded text-[10px]">Submit Log Record</strong>.</li>
+                      </ul>
+                  </section>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">3. Physical Check-in</h3>
+                      <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
+                          <li>Submitting the form here creates a "Pending" log.</li>
+                          <li>You must physically report to the designated office/staff to have them "Clock In" your actual start time on their end to start receiving credit.</li>
+                      </ul>
+                  </section>
+                </>
+              ) : (
+                <>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">1. Overview</h3>
+                      <p className="text-[#a1a1a1] leading-relaxed">The system centralizes service task allocation, student assistant logs, and hours tracking. It maintains schedules, credits, and verification seamlessly to replace manual paperwork.</p>
+                  </section>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">2. Assigning Tasks (Staff/Admin)</h3>
+                      <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
+                          <li>Navigate to the <strong className="text-white">Tasks</strong> tab and utilize the Assign Task form.</li>
+                          <li>Input Date, Time Window, and Capacity.</li>
+                          <li><span className="text-amber-500">Important:</span> Scheduled limits strictly cap the creditable hours, even if students check out later.</li>
+                      </ul>
+                  </section>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">3. Managing Logs & Time Tracking</h3>
+                      <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
+                          <li>On the <strong className="text-white">Approve Logs</strong> tab, identify pending portal submissions. Click the blue <strong className="text-white bg-blue-500/20 px-1 py-0.5 rounded text-[10px]">Start Now</strong> button to activate a session.</li>
+                          <li>When the student leaves, click the red <strong className="text-white bg-red-500/20 px-1 py-0.5 rounded text-[10px]">Stop Time</strong> button.</li>
+                          <li>System calculates precise hours, enforcing the maximum 20-hour limit and applying any late penalties if they exceed the task's schedule.</li>
+                      </ul>
+                  </section>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">4. Verification & Digital Signatures</h3>
+                      <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
+                          <li>You must officially <strong className="text-white">Approve</strong> completed shifts to reflect in final tallies.</li>
+                          <li>Setup your signature in <strong className="text-white">Settings</strong> so it automatically appends to approved records.</li>
+                      </ul>
+                  </section>
+                </>
+              )}
             </div>
           </div>
         </div>
