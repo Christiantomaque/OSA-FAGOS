@@ -1,24 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  collection, 
-  query, 
-  addDoc, 
-  serverTimestamp, 
-  orderBy, 
-  db, 
-  onSnapshot 
-} from '../lib/supabase';
-import { 
-  Loader2, 
-  Plus, 
-  Clock, 
-  KeySquare, 
-  Calendar, 
-  CheckCircle2, 
-  ChevronDown, 
-  PenTool, 
-  Eraser 
-} from 'lucide-react';
+import { collection, query, addDoc, serverTimestamp, orderBy, db, onSnapshot } from '../lib/supabase';
+import { Loader2, Plus, Clock, KeySquare, Calendar, CheckCircle2, ChevronDown, PenTool, Eraser } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
@@ -27,8 +9,8 @@ import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
 // --- Image Placeholders (Replace with local imports once files are uploaded) ---
-const cdmLogo = "https://i.postimg.cc/85zXwzX1/cdm-logo.png";
-const osaLogo = "https://i.postimg.cc/mD83W0XV/osa-logo.png";
+const cdmLogo = "../src/logo/images/cdmlogo.png'";
+const osaLogo = "../src/logo/images/osalogo.png'";
 
 // --- Types ---
 type Task = {
