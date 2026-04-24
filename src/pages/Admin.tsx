@@ -487,13 +487,21 @@ export default function Admin() {
   const handleStartSession = async (record: ServiceRecord) => {
     try {
       const now = new Date();
+      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       
-      await updateDoc(doc(db, 'service_records', record.id), {
+      const payload: any = {
         startTime: now.toISOString(),
-        timeIn: now.toISOString(),
         status: 'active',
         updatedAt: serverTimestamp()
-      });
+      };
+
+      if (!(record as any).accumulatedHours && !record.timeIn?.includes(':')) {
+         payload.timeIn = timeString;
+      } else if (!record.timeIn) {
+         payload.timeIn = timeString;
+      }
+
+      await updateDoc(doc(db, 'service_records', record.id), payload);
       // Result handled by onSnapshot
       showAlert("Success", "Session started.", "success");
     } catch (e: any) {
@@ -505,29 +513,40 @@ export default function Admin() {
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      const startTime = new Date(record.timeIn);
+      const currentSegmentStart = new Date(record.startTime || record.timeIn);
       
-      let durationHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+      if (isNaN(currentSegmentStart.getTime())) {
+          throw new Error("Invalid start time. Cannot calculate duration.");
+      }
+      
+      let durationHours = (now.getTime() - currentSegmentStart.getTime()) / (1000 * 60 * 60);
 
       // Late Penalty Logic
       if (record.scheduledEndTime) {
         const schEndObj = new Date(record.scheduledEndTime);
-        if (schEndObj.getTime() <= (record.scheduledStartTime ? new Date(record.scheduledStartTime).getTime() : startTime.getTime())) {
+        if (schEndObj.getTime() <= (record.scheduledStartTime ? new Date(record.scheduledStartTime).getTime() : currentSegmentStart.getTime())) {
            schEndObj.setDate(schEndObj.getDate() + 1);
         }
         
-        if (now.getTime() > schEndObj.getTime()) {
-           durationHours = (schEndObj.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        if (now.getTime() > schEndObj.getTime() && currentSegmentStart.getTime() < schEndObj.getTime()) {
+           durationHours = (schEndObj.getTime() - currentSegmentStart.getTime()) / (1000 * 60 * 60);
+        } else if (currentSegmentStart.getTime() >= schEndObj.getTime()) {
+           durationHours = 0;
         }
       }
       
       if (durationHours < 0) durationHours = 0;
       
-      const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
+      const previousAccumulated = (record as any).accumulatedHours || 0;
+      const totalEarned = previousAccumulated + durationHours;
+      const displayHours = Math.max(0, Math.min(20, Number(totalEarned.toFixed(2))));
+      
+      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       
       await updateDoc(doc(db, 'service_records', record.id), {
-        timeOut: now.toISOString(),
-        creditHours: creditHours,
+        timeOut: timeString,
+        creditHours: displayHours,
+        accumulatedHours: totalEarned,
         status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
       });
@@ -1361,7 +1380,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                 }
                               >
                                 <Clock className="w-3 h-3" /> 
-                                {r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? 'Start Now' : 'Stop Time')}
+                                {r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? ((r as any).accumulatedHours > 0 ? 'Continue' : 'Start Now') : 'Stop Time')}
                               </button>
                             )}
                             
@@ -1457,7 +1476,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                             }
                           >
                             <Clock className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? 'Start' : 'Stop')}</span>
+                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? ((r as any).accumulatedHours > 0 ? 'Continue' : 'Start') : 'Stop')}</span>
                           </button>
                         )}
                         <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
