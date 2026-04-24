@@ -299,7 +299,7 @@ export default function Portal() {
           </div>
 
           {/* --- TASK SELECTION --- */}
-          <div className="pt-2">
+          <div className="pt-2 task-selection-area">
             <h4 className="text-sm font-semibold text-[#ededed] uppercase tracking-wider mb-4 border-b border-[#2e2e2e] pb-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#3ecf8e]" />
               Service Selection

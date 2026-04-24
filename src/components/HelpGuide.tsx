@@ -27,9 +27,9 @@ export function HelpGuide() {
           skipBeacon: true,
         },
         {
-          target: '.student-portal-board',
-          content: 'This main board contains the form to sign up for a physical service task.',
-          placement: 'top',
+          target: '.task-selection-area',
+          content: 'This area contains the form to sign up for a physical service task. Select an available task from the dropdown.',
+          placement: 'bottom',
         }
       ];
     } else {
@@ -46,7 +46,7 @@ export function HelpGuide() {
           tSteps.push({
               target: document.querySelector('.system-sidebar') ? '.system-sidebar' : 'aside',
               content: 'This sidebar lets you navigate through your available tools like Tasks, Approval Logs, and Members.',
-              placement: 'right',
+              placement: 'auto',
           });
       }
 
@@ -54,7 +54,7 @@ export function HelpGuide() {
           tSteps.push({
               target: 'main',
               content: 'This is the main workspace area where your data and forms appear.',
-              placement: 'left',
+              placement: 'center',
           });
       }
     }
