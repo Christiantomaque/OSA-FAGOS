@@ -10,10 +10,12 @@ import Staff from './pages/Staff';
 import StudentAssistant from './pages/StudentAssistant';
 import Developer from './pages/Developer';
 import Login from './pages/Login';
+import { HelpGuide } from './components/HelpGuide';
 
 export default function App() {
   return (
     <BrowserRouter>
+      <HelpGuide />
       <Routes>
         <Route path="/" element={<Portal />} />
         <Route path="/login" element={<Login />} />

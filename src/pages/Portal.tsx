@@ -169,8 +169,8 @@ export default function Portal() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1c1c1c] text-[#ededed] font-sans sm:p-6 lg:p-8 flex justify-center pb-20">
-      <div className="max-w-3xl w-full bg-[#171717] border border-[#2e2e2e] sm:rounded-lg overflow-hidden mt-4 shadow-xl">
+    <main className="min-h-screen bg-[#1c1c1c] text-[#ededed] font-sans sm:p-6 lg:p-8 flex justify-center pb-20">
+      <div className="student-portal-board max-w-3xl w-full bg-[#171717] border border-[#2e2e2e] sm:rounded-lg overflow-hidden mt-4 shadow-xl">
 
         {/* --- HEADER SECTION --- */}
         <div className="border-b border-[#2e2e2e] bg-[#1c1c1c] p-4 sm:p-6">
@@ -440,6 +440,6 @@ export default function Portal() {
       </div>
 
       <AlertModal isOpen={modal.isOpen} onClose={hideAlert} title={modal.title} message={modal.message} type={modal.type} />
-    </div>
+    </main>
   );
 }
