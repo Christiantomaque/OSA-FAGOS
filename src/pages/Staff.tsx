@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, deleteDoc, setDoc, getDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout } from '../lib/supabase';
+import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, deleteDoc, setDoc, getDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout, onSnapshot } from '../lib/supabase';
 import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Edit2, Trash2, History, Search, Settings, Upload, Menu, X } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
@@ -129,41 +129,48 @@ export default function Staff() {
     return () => unsub();
   }, [showAlert, navigate]);
 
-  const fetchData = async () => {
-    try {
-      const qTasks = query(collection(db, 'tasks'), orderBy('date', 'desc'));
-      const qRecords = query(collection(db, 'service_records'), orderBy('createdAt', 'desc'));
-      const qMembers = query(collection(db, 'admins'), orderBy('lastLogin', 'desc'));
-      
-      const [snapTasks, snapRecords, snapMembers] = await Promise.all([
-        getDocs(qTasks), 
-        getDocs(qRecords),
-        getDocs(qMembers)
-      ]);
-      
-      setTasks(snapTasks.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
-      setRecords(snapRecords.docs.map(d => ({ id: d.id, ...d.data() } as ServiceRecord)));
-      const membersData = snapMembers.docs.map(d => ({ id: d.id, ...d.data() } as AdminMember));
-      setMembers(membersData);
-
-      // Set profile form
-      const currentMember = membersData.find(m => m.id === user?.uid);
-      if (currentMember) {
-        setProfileForm({ 
-          displayName: currentMember.displayName, 
-          role: currentMember.role 
-        });
-      }
-    } catch (e: any) {
-      console.error(e);
-      showAlert("Connection Error", "Failed to load data. Make sure you are authenticated.", "error");
-    }
-  };
-
   useEffect(() => {
-    if (user) {
-      fetchData();
-    }
+    if (!user) return;
+
+    // 1. Tasks Listener
+    const unsubTasks = onSnapshot(
+      query(collection(db, 'tasks'), orderBy('date', 'desc')),
+      (snap) => {
+        setTasks(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Task)));
+      }
+    );
+
+    // 2. Records Listener
+    const unsubRecords = onSnapshot(
+      query(collection(db, 'service_records'), orderBy('createdAt', 'desc')),
+      (snap) => {
+        setRecords(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as ServiceRecord)));
+      }
+    );
+
+    // 3. Members Listener
+    const unsubMembers = onSnapshot(
+      query(collection(db, 'admins'), orderBy('lastLogin', 'desc')),
+      (snap) => {
+        const membersData = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as AdminMember));
+        setMembers(membersData);
+
+        // Update profile form
+        const currentMember = membersData.find((m: any) => m.id === user?.uid);
+        if (currentMember) {
+          setProfileForm({ 
+            displayName: currentMember.displayName, 
+            role: currentMember.role 
+          });
+        }
+      }
+    );
+
+    return () => {
+      unsubTasks();
+      unsubRecords();
+      unsubMembers();
+    };
   }, [user]);
 
   const handleLogout = async () => {
@@ -189,7 +196,7 @@ export default function Staff() {
           updatedAt: serverTimestamp()
         });
         showAlert("Success", "Signature uploaded successfully!", "success");
-        fetchData();
+        // Result handled by onSnapshot
       } catch (err) {
         console.error(err);
         showAlert("Upload Error", "Upload failed.", "error");
@@ -220,7 +227,7 @@ export default function Staff() {
         updatedAt: serverTimestamp()
       });
       showAlert("Success", "Signature updated successfully!", "success");
-      fetchData();
+      // Result handled by onSnapshot
     } catch (error) {
       console.error('Error saving signature:', error);
       showAlert("Error", "Failed to save signature.", "error");
@@ -240,7 +247,7 @@ export default function Staff() {
         updatedAt: serverTimestamp()
       });
       showAlert('Success', 'Profile updated successfully!', 'success');
-      fetchData();
+      // Result handled by onSnapshot
     } catch (err) {
       console.error(err);
       showAlert("Error", "Failed to update profile.", "error");
@@ -281,7 +288,7 @@ export default function Staff() {
       }
       
       reset();
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e: any) {
       console.error("Firestore action error:", e);
       showAlert("Error", `Action failed: ${e.message || 'Unknown error'}`, "error");
@@ -323,7 +330,7 @@ export default function Staff() {
     if (!window.confirm("Are you sure you want to delete this task?")) return;
     try {
       await deleteDoc(doc(db, 'tasks', id));
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e) {
       console.error(e);
     }
@@ -341,7 +348,7 @@ export default function Staff() {
     if (!window.confirm("Are you sure you want to delete this service log? This cannot be undone.")) return;
     try {
       await deleteDoc(doc(db, 'service_records', id));
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e) {
       console.error(e);
       showAlert("Error", "Failed to delete record.", "error");
@@ -369,7 +376,7 @@ export default function Staff() {
         creditHours: creditHours,
         updatedAt: serverTimestamp()
       });
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e) {
       console.error(e);
       showAlert("Error", "Failed to clock out student.", "error");
@@ -395,7 +402,7 @@ export default function Staff() {
 
       await updateDoc(doc(db, 'service_records', id), payload as any);
       setEditingRecord(null);
-      fetchData();
+      // Result handled by onSnapshot
       showAlert("Success", "Service log updated successfully.", "success");
     } catch (e) {
       console.error(e);
@@ -417,7 +424,7 @@ export default function Staff() {
         updatedAt: serverTimestamp()
       });
 
-      fetchData();
+      // Result handled by onSnapshot
       showAlert("Success", `Log has been ${newStatus}.`, "success");
     } catch (e) {
       console.error(e);
@@ -428,10 +435,27 @@ export default function Staff() {
   const activeTasks = tasks.filter(t => t.date >= getTodayYYYYMMDD());
   const historyTasks = tasks.filter(t => t.date < getTodayYYYYMMDD());
 
-  if (loadingAuth || !authorized) return <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
+  // 1. Wait for auth state to be determined
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center">
+        <Loader2 className="animate-spin text-[#3ecf8e]" />
+      </div>
+    );
+  }
 
+  // 2. If no user is logged in, redirect to login
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // 3. If authorized or still showing AlertModal (which handles its own redirect), show content
+  if (!authorized) {
+    return (
+      <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center">
+        <Loader2 className="animate-spin text-[#3ecf8e]" />
+      </div>
+    );
   }
 
   return (

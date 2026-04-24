@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, getDocs, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, deleteDoc, setDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout } from '../lib/supabase';
+import { collection, query, getDocs, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, deleteDoc, setDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout, onSnapshot } from '../lib/supabase';
 import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X, CheckSquare } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
@@ -172,56 +172,69 @@ export default function Admin() {
     return () => unsub();
   }, [showAlert, navigate]);
 
-  const fetchData = async () => {
-    try {
-      const qTasks = query(collection(db, 'tasks'), orderBy('date', 'desc'));
-      const qRecords = query(collection(db, 'service_records'), orderBy('createdAt', 'desc'));
-      const qMembers = query(collection(db, 'admins'), orderBy('lastLogin', 'desc'));
-      const qApprovals = query(collection(db, 'completions'));
-      
-      const [snapTasks, snapRecords, snapMembers, snapApprovals] = await Promise.all([
-        getDocs(qTasks), 
-        getDocs(qRecords),
-        getDocs(qMembers),
-        getDocs(qApprovals)
-      ]);
-      
-      setTasks(snapTasks.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
-      setRecords(snapRecords.docs.map(d => ({ id: d.id, ...d.data() } as ServiceRecord)));
-      const membersData = snapMembers.docs.map(d => ({ id: d.id, ...d.data() } as AdminMember));
-      setMembers(membersData);
-      setApprovals(snapApprovals.docs.map(d => ({ id: d.id, ...d.data() } as CompletionApproval)));
-
-      // Set profile form
-      const currentMember = membersData.find(m => m.id === user?.uid);
-      if (currentMember) {
-        setProfileForm({ 
-          displayName: currentMember.displayName, 
-          role: currentMember.role 
-        });
-      }
-    } catch (e: any) {
-      console.error(e);
-      showAlert("Error", "Failed to load data. Make sure you are authenticated. Error: " + e.message, "error");
-    }
-  };
-
   useEffect(() => {
-    if (user) {
-      fetchData();
-      const fetchSettings = async () => {
-        try {
-          const snap = await getDoc(doc(db, 'settings', 'global'));
-          if (snap.exists() && snap.data().allowSignups !== undefined) {
-            setAllowSignups(snap.data().allowSignups);
-          }
-        } catch (e) {
-          console.error("Failed to fetch settings:", e);
+    if (!user) return;
+
+    // 1. Tasks Listener
+    const unsubTasks = onSnapshot(
+      query(collection(db, 'tasks'), orderBy('date', 'desc')),
+      (snap) => {
+        setTasks(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Task)));
+      }
+    );
+
+    // 2. Records Listener
+    const unsubRecords = onSnapshot(
+      query(collection(db, 'service_records'), orderBy('createdAt', 'desc')),
+      (snap) => {
+        setRecords(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as ServiceRecord)));
+      }
+    );
+
+    // 3. Members Listener
+    const unsubMembers = onSnapshot(
+      query(collection(db, 'admins'), orderBy('lastLogin', 'desc')),
+      (snap) => {
+        const membersData = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as AdminMember));
+        setMembers(membersData);
+        
+        // Update profile form if current user is found
+        const currentMember = membersData.find((m: any) => m.id === user?.uid);
+        if (currentMember) {
+          setProfileForm({ 
+            displayName: currentMember.displayName, 
+            role: currentMember.role 
+          });
         }
-      };
-      if (tab === 'members') fetchSettings();
-    }
-  }, [user, tab]);
+      }
+    );
+
+    // 4. Approvals Listener
+    const unsubApprovals = onSnapshot(
+      query(collection(db, 'completions')),
+      (snap) => {
+        setApprovals(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as CompletionApproval)));
+      }
+    );
+
+    // 5. Settings Listener
+    const unsubSettings = onSnapshot(
+      doc(db, 'settings', 'global'),
+      (snap: any) => {
+        if (snap.exists() && snap.data().allowSignups !== undefined) {
+          setAllowSignups(snap.data().allowSignups);
+        }
+      }
+    );
+
+    return () => {
+      unsubTasks();
+      unsubRecords();
+      unsubMembers();
+      unsubApprovals();
+      unsubSettings();
+    };
+  }, [user]);
 
   const handleToggleSignups = async () => {
     try {
@@ -254,9 +267,11 @@ export default function Admin() {
           updatedAt: serverTimestamp()
         });
         showAlert("Success", "Signature uploaded successfully!", "success");
-        fetchData();
+      try {
+        // No need to manually fetchData() as onSnapshot will handle it
       } catch (err) {
         console.error(err);
+      }
         showAlert("Error", "Upload failed.", "error");
       } finally {
         setSavingSignature(false);
@@ -276,7 +291,7 @@ export default function Admin() {
         updatedAt: serverTimestamp()
       });
       showAlert("Profile Updated", "Your profile information has been successfully updated.", "success");
-      fetchData();
+      // Result handled by onSnapshot
     } catch (err) {
       console.error(err);
       showAlert("Error", "Failed to update profile.", "error");
@@ -309,7 +324,7 @@ export default function Admin() {
       }, { merge: true });
       
       showAlert("Success", "Signature saved successfully!", "success");
-      fetchData();
+      // Result handled by onSnapshot
     } catch (error: any) {
       console.error('Error saving signature:', error);
       showAlert("Error", "Failed to save signature: " + error.message, "error");
@@ -379,7 +394,7 @@ export default function Admin() {
       }
       
       reset();
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e: any) {
       console.error("Task submission error:", e);
       showAlert("Error", `Error saving task: ${e.message || 'Unknown error'}`, "error");
@@ -421,7 +436,7 @@ export default function Admin() {
     if (!window.confirm("Delete this task? All records linked to it will remain but orphaned from the schedule.")) return;
     try {
       await deleteDoc(doc(db, 'tasks', id));
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e) {
       console.error(e);
     }
@@ -439,7 +454,7 @@ export default function Admin() {
     if (!window.confirm("Are you sure you want to delete this service log? This cannot be undone.")) return;
     try {
       await deleteDoc(doc(db, 'service_records', id));
-      fetchData();
+      // Result handled by onSnapshot
       showAlert("Success", "Service log has been deleted.", "success");
     } catch (e) {
       console.error(e);
@@ -459,7 +474,7 @@ export default function Admin() {
         status: 'active',
         updatedAt: serverTimestamp()
       });
-      fetchData();
+      // Result handled by onSnapshot
       showAlert("Success", "Session started.", "success");
     } catch (e: any) {
       console.error("FULL ERROR OBJECT:", e);
@@ -489,7 +504,7 @@ export default function Admin() {
         status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
       });
-      fetchData();
+      // Result handled by onSnapshot
       showAlert("Success", "Student clocked out successfully.", "success");
     } catch (e: any) {
       console.error("FULL ERROR OBJECT:", e);
@@ -516,7 +531,7 @@ export default function Admin() {
       
       await updateDoc(doc(db, 'service_records', id), payload as any);
       setEditingRecord(null);
-      fetchData();
+      // Result handled by onSnapshot
       showAlert("Success", "Service log updated successfully.", "success");
     } catch (e) {
       console.error(e);
@@ -606,7 +621,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
 
       await addDoc(collection(db, 'completions'), approvalData);
       showAlert("Approved", `${student.studentName}'s completion has been approved.`, "success");
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e) {
       console.error(e);
       showAlert("Error", "Failed to approve completion.", "error");
@@ -620,7 +635,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     try {
       await deleteDoc(doc(db, 'completions', approvalId));
       showAlert("Revoked", `Approval for ${studentName} has been successfully undone.`, "success");
-      fetchData();
+      // Result handled by onSnapshot
     } catch (e) {
       console.error(e);
       showAlert("Error", "Failed to undo approval.", "error");
@@ -685,7 +700,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         updatedAt: serverTimestamp()
       });
       
-      fetchData();
+      // Result handled by onSnapshot
       showAlert("Success", `Attendance record has been ${newStatus}.`, "success");
     } catch (e: any) {
       console.error("FULL ERROR OBJECT:", e);
@@ -791,10 +806,27 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     m.role.toLowerCase().includes(membersSearch.toLowerCase())
   );
 
-  if (loadingAuth || !authorized) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
+  // 1. Wait for auth state to be determined
+  if (loadingAuth) {
+    return (
+      <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center">
+        <Loader2 className="animate-spin text-[#3ecf8e]" />
+      </div>
+    );
+  }
 
+  // 2. If no user is logged in, redirect to login
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // 3. If authorized or still showing AlertModal (which handles its own redirect), show content
+  if (!authorized) {
+    return (
+      <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center">
+        <Loader2 className="animate-spin text-[#3ecf8e]" />
+      </div>
+    );
   }
 
   return (
@@ -1430,7 +1462,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                           });
                         }
                         showAlert("Success", `${eligible.length} students approved successfully.`, "success");
-                        fetchData();
+                        // Result handled by onSnapshot
                       } catch (e) {
                         showAlert("Error", "Bulk approval failed.", "error");
                       }
