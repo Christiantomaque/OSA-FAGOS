@@ -43,11 +43,7 @@ export default function Login() {
                lastLogin: serverTimestamp()
              }, { merge: true });
           }
-          
-          if (role === 'developer') navigate('/developer');
-          else if (role === 'admin') navigate('/admin');
-          else if (role === 'staff') navigate('/staff');
-          else if (role === 'student_assistant') navigate('/student-assistant');
+          if (role === 'developer' || role === 'admin') navigate('/admin');
           else navigate('/staff');
         } catch (e) {
            console.error("Auth routing error", e);
