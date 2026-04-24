@@ -38,6 +38,7 @@ type ServiceRecord = {
   scheduledStartTime?: string;
   scheduledEndTime?: string;
   taskId?: string;
+  staffName?: string;
   creditHours: number;
   status: 'pending' | 'verified' | 'active';
   startTime?: any;
@@ -869,13 +870,20 @@ export default function Staff() {
                       ).map(r => (
                         <tr key={r.id} className="hover:bg-[#1c1c1c]">
                           <td className="px-6 py-4">
-                            <div className="font-bold">{r.studentName}</div>
-                            <div className="text-[10px] text-[#a1a1a1]">{r.studentNo} | {r.program}</div>
+                            <div className="font-bold text-[#ededed]">{r.studentName}</div>
+                            <div className="text-[10px] text-[#a1a1a1] space-y-0.5 mt-1 font-mono">
+                               <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
+                               {r.studentEmail && <div>{r.studentEmail}</div>}
+                               {r.bracket && <div>Bracket: {r.bracket}</div>}
+                            </div>
                           </td>
-                          <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">{r.creditHours}</td>
+                          <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
                           <td className="px-6 py-4">
-                             <div className="text-xs">{r.taskTitle}</div>
-                             <div className="text-[9px] text-[#a1a1a1] font-mono uppercase">{formatDate(r.date)}</div>
+                             <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
+                             {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
+                             <div className="text-[9px] text-[#a1a1a1] font-mono mt-1 uppercase bg-[#262626] inline-block px-2 py-0.5 rounded border border-[#2e2e2e]">
+                                {formatDate(r.date)} | {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
+                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
@@ -961,16 +969,26 @@ export default function Staff() {
                                {r.status}
                              </span>
                           </div>
-                          <div className="text-[10px] text-[#a1a1a1] mt-0.5">{r.studentNo} | {r.program}</div>
+                          <div className="text-[10px] text-[#a1a1a1] mt-1 space-y-0.5 font-mono">
+                             <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
+                             {r.studentEmail && <div>{r.studentEmail}</div>}
+                             {r.bracket && <div>Bracket: {r.bracket}</div>}
+                          </div>
                         </div>
-                        <div className="text-right shrink-0 font-bold text-[#3ecf8e] text-lg">
+                        <div className="text-right shrink-0 font-bold text-[#3ecf8e] text-xl">
                           {r.creditHours}h
                         </div>
                       </div>
                       
                       <div className="bg-[#262626] rounded-md p-3">
-                         <div className="text-xs font-medium text-[#ededed] truncate">{r.taskTitle}</div>
-                         <div className="text-[9px] text-[#a1a1a1] font-mono uppercase mt-0.5">{formatDate(r.date)}</div>
+                         <div className="flex justify-between items-start gap-2 mb-2">
+                           <div className="text-xs font-bold text-[#ededed] break-words leading-tight">{r.taskTitle}</div>
+                           {r.staffName && <div className="text-[9px] text-[#a1a1a1] uppercase tracking-wide shrink-0 border border-[#2e2e2e] bg-[#171717] px-2 py-0.5 rounded">{r.staffName}</div>}
+                         </div>
+                         <div className="flex justify-between items-center text-[9px] text-[#a1a1a1] font-mono mt-2 pt-2 border-t border-[#333]">
+                           <span className="uppercase">{formatDate(r.date)}</span>
+                           <span>{formatTime(r.timeIn)} - {formatTime(r.timeOut)}</span>
+                         </div>
                       </div>
 
                       <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">

@@ -38,6 +38,7 @@ type ServiceRecord = {
   scheduledStartTime?: string;
   scheduledEndTime?: string;
   taskId?: string;
+  staffName?: string;
   creditHours: number;
   status: 'pending' | 'verified' | 'active';
   startTime?: any;
@@ -126,7 +127,7 @@ export default function Staff() {
           }
 
           // Strict Role Check for Staff Portal
-          if (userRole === 'staff' || userRole === 'student_assistant' || userRole === 'developer' || userRole === 'admin') {
+          if (userRole === 'student_assistant' || userRole === 'staff' || userRole === 'developer' || userRole === 'admin') {
             setAuthorized(true);
           } else {
             showAlert(
@@ -434,12 +435,10 @@ export default function Staff() {
   const handleStartSession = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      // Keep the HH:MM format for the 'timeIn' text column
-      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       
       await updateDoc(doc(db, 'service_records', record.id), {
-        startTime: now.toISOString(), // Passes a full valid timestamp string for timestamptz
-        timeIn: timeString,           // Passes "HH:MM" for your text column
+        startTime: now.toISOString(), 
+        timeIn: now.toISOString(),
         status: 'active',
         updatedAt: serverTimestamp()
       });
@@ -524,9 +523,9 @@ export default function Staff() {
       setEditingRecord(null);
       // Result handled by onSnapshot
       showAlert("Success", "Service log updated successfully.", "success");
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      showAlert("Error", `Failed to update service log: ${e.message || "Unknown error"}`, "error");
+      showAlert("Error", "Failed to update service log.", "error");
     }
   };
 
@@ -585,7 +584,7 @@ export default function Staff() {
           <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
             <Users className="w-4 h-4 text-black" />
           </div>
-          Staff Portal
+          Student Portal
         </div>
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-[#ededed]">
           {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -602,7 +601,7 @@ export default function Staff() {
              <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
                 <Users className="w-4 h-4 text-black" />
              </div>
-             Staff Portal
+             Student Portal
           </div>
           <div className="text-[10px] text-[#a1a1a1] mt-1 italic">Assign & Verify Task</div>
         </div>
@@ -844,7 +843,7 @@ export default function Staff() {
                 </form>
               </div>
             )}
-            <div className="border border-[#2e2e2e] rounded-xl overflow-hidden bg-[#171717] w-full">
+            <div className="border border-[#2e2e2e] rounded-xl bg-[#171717] overflow-hidden w-full">
                {/* Desktop View */}
                <div className="hidden lg:block overflow-x-auto w-full">
                  <table className="min-w-full text-left text-sm whitespace-nowrap">
@@ -869,13 +868,20 @@ export default function Staff() {
                       ).map(r => (
                         <tr key={r.id} className="hover:bg-[#1c1c1c]">
                           <td className="px-6 py-4">
-                            <div className="font-bold">{r.studentName}</div>
-                            <div className="text-[10px] text-[#a1a1a1]">{r.studentNo} | {r.program}</div>
+                            <div className="font-bold text-[#ededed]">{r.studentName}</div>
+                            <div className="text-[10px] text-[#a1a1a1] space-y-0.5 mt-1 font-mono">
+                               <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
+                               {r.studentEmail && <div>{r.studentEmail}</div>}
+                               {r.bracket && <div>Bracket: {r.bracket}</div>}
+                            </div>
                           </td>
-                          <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">{r.creditHours}</td>
+                          <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
                           <td className="px-6 py-4">
-                             <div className="text-xs">{r.taskTitle}</div>
-                             <div className="text-[9px] text-[#a1a1a1] font-mono uppercase">{formatDate(r.date)}</div>
+                             <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
+                             {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
+                             <div className="text-[9px] text-[#a1a1a1] font-mono mt-1 uppercase bg-[#262626] inline-block px-2 py-0.5 rounded border border-[#2e2e2e]">
+                                {formatDate(r.date)} | {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
+                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
@@ -938,7 +944,7 @@ export default function Staff() {
                     </tbody>
                  </table>
                </div>
-               
+
                {/* Mobile View */}
                <div className="lg:hidden flex flex-col divide-y divide-[#2e2e2e]">
                  {records.filter(r => 
@@ -961,16 +967,26 @@ export default function Staff() {
                                {r.status}
                              </span>
                           </div>
-                          <div className="text-[10px] text-[#a1a1a1] mt-0.5">{r.studentNo} | {r.program}</div>
+                          <div className="text-[10px] text-[#a1a1a1] mt-1 space-y-0.5 font-mono">
+                             <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
+                             {r.studentEmail && <div>{r.studentEmail}</div>}
+                             {r.bracket && <div>Bracket: {r.bracket}</div>}
+                          </div>
                         </div>
-                        <div className="text-right shrink-0 font-bold text-[#3ecf8e] text-lg">
+                        <div className="text-right shrink-0 font-bold text-[#3ecf8e] text-xl">
                           {r.creditHours}h
                         </div>
                       </div>
                       
                       <div className="bg-[#262626] rounded-md p-3">
-                         <div className="text-xs font-medium text-[#ededed] truncate">{r.taskTitle}</div>
-                         <div className="text-[9px] text-[#a1a1a1] font-mono uppercase mt-0.5">{formatDate(r.date)}</div>
+                         <div className="flex justify-between items-start gap-2 mb-2">
+                           <div className="text-xs font-bold text-[#ededed] break-words leading-tight">{r.taskTitle}</div>
+                           {r.staffName && <div className="text-[9px] text-[#a1a1a1] uppercase tracking-wide shrink-0 border border-[#2e2e2e] bg-[#171717] px-2 py-0.5 rounded">{r.staffName}</div>}
+                         </div>
+                         <div className="flex justify-between items-center text-[9px] text-[#a1a1a1] font-mono mt-2 pt-2 border-t border-[#333]">
+                           <span className="uppercase">{formatDate(r.date)}</span>
+                           <span>{formatTime(r.timeIn)} - {formatTime(r.timeOut)}</span>
+                         </div>
                       </div>
 
                       <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">

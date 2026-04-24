@@ -11,6 +11,10 @@ export function HelpGuide() {
   const location = useLocation();
 
   const isPortal = location.pathname === '/';
+  const isAdmin = location.pathname === '/admin';
+  const isDeveloper = location.pathname === '/developer';
+  const isStaff = location.pathname === '/staff';
+  const isStudentAssistant = location.pathname === '/studentassistant';
 
   // Dynamic steps based on what's available in the DOM
   const [steps, setSteps] = useState<Step[]>([]);
@@ -24,7 +28,6 @@ export function HelpGuide() {
           target: 'body',
           content: 'Welcome to the OSA Task Management Portal! This is where students sign up for daily tasks.',
           placement: 'center',
-          skipBeacon: true,
         },
         {
           target: '.task-selection-area',
@@ -33,34 +36,43 @@ export function HelpGuide() {
         }
       ];
     } else {
+      let roleTitle = 'System Dashboard';
+      if (isAdmin) roleTitle = 'Admin Dashboard';
+      if (isDeveloper) roleTitle = 'Developer Console';
+      if (isStaff) roleTitle = 'Staff Dashboard';
+      if (isStudentAssistant) roleTitle = 'Student Assistant Hub';
+
       tSteps = [
         {
           target: 'body',
-          content: 'Welcome to the System Dashboard! Let us quickly show you around your workspace.',
+          content: `Welcome to the ${roleTitle}! Let us quickly show you around your workspace.`,
           placement: 'center',
-          skipBeacon: true,
         }
       ];
 
-      if (document.querySelector('.system-sidebar') || document.querySelector('aside')) {
+      // Use a safer DOM selector for sidebars to prevent overlap
+      // Note: react-joyride positions based on the target element.
+      const sidebarTarget = document.querySelector('.tour-sidebar') || document.querySelector('aside');
+      if (sidebarTarget) {
           tSteps.push({
-              target: document.querySelector('.system-sidebar') ? '.system-sidebar' : 'aside',
+              target: 'aside',
               content: 'This sidebar lets you navigate through your available tools like Tasks, Approval Logs, and Members.',
-              placement: 'auto',
+              placement: 'right',
           });
       }
 
-      if (document.querySelector('main')) {
+      const mainTarget = document.querySelector('.tour-main-content') || document.querySelector('main');
+      if (mainTarget) {
           tSteps.push({
               target: 'main',
               content: 'This is the main workspace area where your data and forms appear.',
-              placement: 'center',
+              placement: 'top',
           });
       }
     }
 
     setSteps(tSteps);
-  }, [runTour, isPortal]);
+  }, [runTour, isPortal, isAdmin, isDeveloper, isStaff, isStudentAssistant]);
 
   return (
     <>
@@ -136,7 +148,13 @@ export function HelpGuide() {
                <h2 className="text-xl font-bold flex items-center gap-2 text-[#3ecf8e]">
                  <BookOpen className="w-5 h-5" /> OSA System Reference Guide
                </h2>
-               <p className="text-xs text-[#a1a1a1] mt-1">{isPortal ? 'Portal Instructions' : 'Dashboard Workflow & Management'}</p>
+               <p className="text-xs text-[#a1a1a1] mt-1">
+                 {isPortal ? 'Portal Instructions' : 
+                  isAdmin ? 'Admin Dashboard Workflow & Management' : 
+                  isDeveloper ? 'Developer Tools & Overview' : 
+                  isStaff ? 'Staff Panel Operations' : 
+                  'Student Assistant Console Guide'}
+               </p>
             </div>
             <div className="p-6 overflow-y-auto space-y-8 text-sm custom-scrollbar">
               {isPortal ? (
@@ -162,14 +180,28 @@ export function HelpGuide() {
                       </ul>
                   </section>
                 </>
+              ) : isStudentAssistant ? (
+                <>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">1. Overview for Student Assistants</h3>
+                      <p className="text-[#a1a1a1] leading-relaxed">As a Student Assistant, you can review tasks and monitor the active service logs that have been recorded.</p>
+                  </section>
+                  <section>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">2. Tracking Tasks & Logs</h3>
+                      <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
+                          <li>Check the <strong className="text-white">Active Logs</strong> to see students who are currently working on your assigned tasks.</li>
+                          <li>You can assist in monitoring but approvals depend on Staff/Admin verification limits.</li>
+                      </ul>
+                  </section>
+                </>
               ) : (
                 <>
                   <section>
-                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">1. Overview</h3>
-                      <p className="text-[#a1a1a1] leading-relaxed">The system centralizes service task allocation, student assistant logs, and hours tracking. It maintains schedules, credits, and verification seamlessly to replace manual paperwork.</p>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">1. Management Overview</h3>
+                      <p className="text-[#a1a1a1] leading-relaxed">The system centralizes service task allocation, student assistant logs, and hours tracking. It maintains schedules, credits, and verification seamlessly.</p>
                   </section>
                   <section>
-                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">2. Assigning Tasks (Staff/Admin)</h3>
+                      <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">2. Assigning Tasks</h3>
                       <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
                           <li>Navigate to the <strong className="text-white">Tasks</strong> tab and utilize the Assign Task form.</li>
                           <li>Input Date, Time Window, and Capacity.</li>
@@ -179,7 +211,7 @@ export function HelpGuide() {
                   <section>
                       <h3 className="text-[#3ecf8e] font-bold uppercase tracking-wider text-xs mb-3 border-b border-[#2e2e2e] pb-1">3. Managing Logs & Time Tracking</h3>
                       <ul className="list-disc pl-5 space-y-2 text-[#a1a1a1]">
-                          <li>On the <strong className="text-white">Approve Logs</strong> tab, identify pending portal submissions. Click the blue <strong className="text-white bg-blue-500/20 px-1 py-0.5 rounded text-[10px]">Start Now</strong> button to activate a session.</li>
+                          <li>On the <strong className="text-white">Service Logs</strong> tab, identify pending portal submissions. Click the blue <strong className="text-white bg-blue-500/20 px-1 py-0.5 rounded text-[10px]">Start Now</strong> button to activate a session.</li>
                           <li>When the student leaves, click the red <strong className="text-white bg-red-500/20 px-1 py-0.5 rounded text-[10px]">Stop Time</strong> button.</li>
                           <li>System calculates precise hours, enforcing the maximum 20-hour limit and applying any late penalties if they exceed the task's schedule.</li>
                       </ul>
@@ -205,7 +237,7 @@ export function HelpGuide() {
           continuous={true}
           onEvent={(data: EventData) => {
             if (['finished', 'skipped'].includes(data.status as string)) {
-              setRunTour(false);
+               setRunTour(false);
             }
           }}
           options={{
@@ -213,6 +245,7 @@ export function HelpGuide() {
             primaryColor: '#3ecf8e',
             textColor: '#ededed',
             arrowColor: '#171717',
+            overlayColor: 'rgba(0, 0, 0, 0.8)',
             zIndex: 1000,
           }}
           styles={{

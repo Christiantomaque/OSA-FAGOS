@@ -1295,50 +1295,43 @@ const handleApproveCompletion = async (student: StudentProgress) => {
             <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
               {/* Desktop View */}
               <div className="hidden xl:block overflow-x-auto w-full">
-                <table className="min-w-full text-left text-[11px] whitespace-nowrap">
-                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-[9px] font-bold uppercase tracking-wider">
+                <table className="min-w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-[#262626] text-[#a1a1a1] text-[10px] uppercase font-bold tracking-widest border-b border-[#2e2e2e]">
                       <tr>
-                        <th className="px-3 py-2">Beneficiary</th>
-                        <th className="px-3 py-2">Program/Sec</th>
-                        <th className="px-3 py-2">Task Title</th>
-                        <th className="px-3 py-2">Time Window</th>
-                        <th className="px-3 py-2 text-center">Hrs</th>
-                        <th className="px-3 py-2 text-center">Status</th>
-                        <th className="px-3 py-2 text-right">Action</th>
+                         <th className="px-6 py-4">Student Info</th>
+                         <th className="px-6 py-4 text-center">Hours</th>
+                         <th className="px-6 py-4">Assigned Task</th>
+                         <th className="px-6 py-4 text-center">Status</th>
+                         <th className="px-6 py-4 text-right">Verification</th>
                       </tr>
                     </thead>
                   <tbody className="divide-y divide-[#2e2e2e]">
                     {filteredRecords.length === 0 ? (
-                        <tr><td colSpan={7} className="px-6 py-8 text-center text-[#a1a1a1]">No records found matching your search.</td></tr>
+                        <tr><td colSpan={5} className="px-6 py-10 text-center text-[#a1a1a1]">No records found matching your search.</td></tr>
                     ) : filteredRecords.map(r => (
                       <tr key={r.id} className="hover:bg-[#1c1c1c]">
-                        <td className="px-4 py-3 flex items-center gap-3">
-                           <div className="w-6 h-6 rounded bg-[#262626] border border-[#2e2e2e] text-[#a1a1a1] text-[10px] flex items-center justify-center font-bold">
-                              {r.studentName.substring(0, 2).toUpperCase()}
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-[#ededed]">{r.studentName}</div>
+                          <div className="text-[10px] text-[#a1a1a1] space-y-0.5 mt-1 font-mono">
+                             <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
+                             {r.studentEmail && <div>{r.studentEmail}</div>}
+                             {r.bracket && <div>Bracket: {r.bracket}</div>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
+                        <td className="px-6 py-4">
+                           <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
+                           {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
+                           <div className="text-[9px] text-[#a1a1a1] font-mono mt-1 uppercase bg-[#262626] inline-block px-2 py-0.5 rounded border border-[#2e2e2e]">
+                              {formatDate(r.date)} | {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
                            </div>
-                           <div>
-                              <div className="font-medium text-[#ededed]">{r.studentName}</div>
-                              <div className="text-[10px] text-[#a1a1a1] font-mono">{r.studentNo}</div>
-                           </div>
                         </td>
-                        <td className="px-4 py-3 text-[#a1a1a1]">
-                          {r.program} • {r.section}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-[#a1a1a1]">
-                          {r.taskTitle.substring(0, 20)}{r.taskTitle.length > 20 ? '...' : ''}
-                        </td>
-                        <td className="px-4 py-3 text-[#a1a1a1] font-mono text-xs">
-                          {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
-                        </td>
-                        <td className="px-4 py-3 text-center font-bold text-[#ededed]">
-                          {r.creditHours}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/10 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
                             {r.status.toUpperCase()}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-6 py-4 text-right">
                           <div className="flex justify-end items-center gap-2">
                             {(r.status === 'pending' || r.status === 'active') && (
                               <button 
@@ -1382,7 +1375,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                 r.status === 'active' 
                                   ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
                                   : r.status === 'pending' 
-                                    ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b]' 
+                                    ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b] shadow-[0_0_10px_rgba(62,207,142,0.2)]'
                                     : 'border border-[#2e2e2e] text-[#a1a1a1] hover:bg-[#262626] hover:text-[#ededed]'
                               }`}
                             >
@@ -1401,41 +1394,39 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                 {filteredRecords.length === 0 ? (
                   <div className="p-8 text-center text-[#a1a1a1] text-sm">No records found.</div>
                 ) : filteredRecords.map(r => (
-                  <div key={r.id} className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors">
+                  <div key={r.id} className="p-4 space-y-3 hover:bg-[#1c1c1c] transition-colors">
                     <div className="flex justify-between items-start gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded bg-[#262626] border border-[#2e2e2e] text-[#a1a1a1] text-xs flex items-center justify-center font-bold shrink-0 mt-1">
-                          {r.studentName.substring(0, 2).toUpperCase()}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                           <div className="font-bold text-[#ededed] truncate">{r.studentName}</div>
+                           <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0 ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                             {r.status}
+                           </span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-[#ededed] leading-tight break-words">{r.studentName}</div>
-                          <div className="text-[10px] text-[#a1a1a1] font-mono mt-0.5">{r.studentNo} • {r.program}/{r.section}</div>
-                          <div className="text-xs text-[#a1a1a1] font-mono mt-1 w-full truncate" title={r.taskTitle}>{r.taskTitle}</div>
+                        <div className="text-[10px] text-[#a1a1a1] mt-1 space-y-0.5 font-mono">
+                           <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
+                           {r.studentEmail && <div>{r.studentEmail}</div>}
+                           {r.bracket && <div>Bracket: {r.bracket}</div>}
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase mb-1 ${r.status === 'verified' ? 'bg-[#3ecf8e]/10 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                          {r.status.toUpperCase()}
-                        </span>
-                        <div className="flex items-center gap-1 justify-end font-bold text-[#ededed]">
-                          <Clock className="w-3.5 h-3.5 text-[#a1a1a1]" /> {r.creditHours}
-                        </div>
+                      <div className="text-right shrink-0 font-bold text-[#3ecf8e] text-xl">
+                        {r.creditHours}h
                       </div>
                     </div>
-
-                    <div className="bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-xs font-mono text-[#a1a1a1] flex justify-between">
-                      <span>{formatTime(r.timeIn)}</span>
-                      <span>—</span>
-                      <span>{formatTime(r.timeOut)}</span>
+                    
+                    <div className="bg-[#262626] rounded-md p-3">
+                       <div className="flex justify-between items-start gap-2 mb-2">
+                         <div className="text-xs font-bold text-[#ededed] break-words leading-tight">{r.taskTitle}</div>
+                         {r.staffName && <div className="text-[9px] text-[#a1a1a1] uppercase tracking-wide shrink-0 border border-[#2e2e2e] bg-[#171717] px-2 py-0.5 rounded">{r.staffName}</div>}
+                       </div>
+                       <div className="flex justify-between items-center text-[9px] text-[#a1a1a1] font-mono mt-2 pt-2 border-t border-[#333]">
+                         <span className="uppercase">{formatDate(r.date)}</span>
+                         <span>{formatTime(r.timeIn)} - {formatTime(r.timeOut)}</span>
+                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center gap-2 pt-2 border-t border-[#2e2e2e]/50">
-                      <div className="flex gap-2">
-                        <button onClick={() => handleEditRecord(r)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-amber-500" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 bg-[#262626] rounded text-[#a1a1a1] hover:text-red-500" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                      
-                      <div className="flex gap-2">
+                    <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">
+                      <div className="flex gap-1">
                         {(r.status === 'pending' || r.status === 'active') && (
                           <button 
                             onClick={() => {
@@ -1446,32 +1437,42 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               if (!r.startTime) handleStartSession(r);
                               else handleClockOut(r);
                             }}
-                            className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded ${
+                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
                               r.creditHours >= 20 
-                                ? 'bg-gray-600' 
+                                ? 'bg-gray-600 cursor-not-allowed text-white' 
                                 : !checkIsWithinSchedule(r)
-                                  ? 'bg-[#2e2e2e] text-[#666]'
-                                  : !r.startTime ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
+                                  ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                  : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
                             }`}
                             disabled={r.creditHours >= 20}
+                            title={
+                              r.creditHours >= 20 
+                                ? "Completed" 
+                                : !checkIsWithinSchedule(r) 
+                                  ? "Outside assigned schedule" 
+                                  : (!r.startTime ? "Start Session" : "Stop Session")
+                            }
                           >
-                            {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start' : 'Stop')}
+                            <Clock className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start' : 'Stop')}</span>
                           </button>
                         )}
-                        <button 
-                           onClick={() => handleVerify(r.id, r.status)}
-                           disabled={r.status === 'active'}
-                           className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded ${
-                             r.status === 'active' 
-                               ? 'border border-[#2e2e2e] text-[#666]'
-                               : r.status === 'pending' 
-                                 ? 'bg-[#3ecf8e] text-black' 
-                                 : 'border border-[#2e2e2e] text-[#a1a1a1]'
-                           }`}
-                        >
-                           {r.status === 'verified' ? 'Unapprove' : 'Approve'}
-                        </button>
+                        <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
+                      <button 
+                        onClick={() => handleVerify(r.id, r.status)} 
+                        disabled={r.status === 'active'}
+                        className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${
+                          r.status === 'active' 
+                            ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                            : r.status === 'pending' 
+                              ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' 
+                              : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'
+                        }`}
+                      >
+                         {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                      </button>
                     </div>
                   </div>
                 ))}
