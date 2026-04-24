@@ -191,7 +191,7 @@ export default function Portal() {
             <img 
               src={osaLogo} 
               alt="OSA Logo" 
-              className="w-12 h-12 sm:w-20 sm:h-20 -mt-5 sm:-mt-8 object-contain shrink-0 drop-shadow-md scale-170 origin-top" 
+              className="w-12 h-12 sm:w-20 sm:h-20 -mt-7 sm:-mt-10 object-contain shrink-0 drop-shadow-md scale-170 origin-top" 
             />
 
           </div>
