@@ -899,7 +899,7 @@ export default function Staff() {
                                         showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
                                         return;
                                       }
-                                      if (!r.startTime) handleStartSession(r);
+                                      if (r.status === 'pending') handleStartSession(r);
                                       else handleClockOut(r);
                                     }}
                                     className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
@@ -907,7 +907,7 @@ export default function Staff() {
                                         ? 'bg-gray-600 cursor-not-allowed text-white' 
                                         : !checkIsWithinSchedule(r)
                                           ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                          : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                          : r.status === 'pending' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
                                     }`}
                                     disabled={r.creditHours >= 20}
                                     title={
@@ -915,11 +915,11 @@ export default function Staff() {
                                         ? "Completed" 
                                         : !checkIsWithinSchedule(r) 
                                           ? "Outside assigned schedule" 
-                                          : (!r.startTime ? "Start Session" : "Stop Session")
+                                          : (r.status === 'pending' ? "Start Session" : "Stop Session")
                                     }
                                   >
                                     <Clock className="w-3.5 h-3.5" />
-                                    <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}</span>
+                                    <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? 'Start Now' : 'Stop Time')}</span>
                                   </button>
                                 )}
                                 <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
@@ -1001,7 +1001,7 @@ export default function Staff() {
                                   showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
                                   return;
                                 }
-                                if (!r.startTime) handleStartSession(r);
+                                if (r.status === 'pending') handleStartSession(r);
                                 else handleClockOut(r);
                               }}
                               className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
@@ -1009,7 +1009,7 @@ export default function Staff() {
                                   ? 'bg-gray-600 cursor-not-allowed text-white' 
                                   : !checkIsWithinSchedule(r)
                                     ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                    : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                    : r.status === 'pending' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
                               }`}
                               disabled={r.creditHours >= 20}
                               title={
@@ -1017,11 +1017,11 @@ export default function Staff() {
                                   ? "Completed" 
                                   : !checkIsWithinSchedule(r) 
                                     ? "Outside assigned schedule" 
-                                    : (!r.startTime ? "Start Session" : "Stop Session")
+                                    : (r.status === 'pending' ? "Start Session" : "Stop Session")
                               }
                             >
                               <Clock className="w-3.5 h-3.5" />
-                              <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start' : 'Stop')}</span>
+                              <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? 'Start' : 'Stop')}</span>
                             </button>
                           )}
                           <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
