@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, auth, db, signInWithGoogle, signInWithMicrosoft, sendPasswordResetEmail } from '../lib/supabase';
-// ADDED 'Home' to the lucide-react imports
 import { Loader2, Mail, Lock, LogIn, Chrome, Monitor, Home } from 'lucide-react';
 
 export default function Login() {
@@ -134,20 +133,21 @@ export default function Login() {
 
   if (loading) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
 
-  // ADDED 'relative' to the main wrapper to allow absolute positioning of the Home button
   return (
-    <div className="min-h-screen bg-[#1c1c1c] flex flex-col items-center justify-center p-6 text-[#ededed] relative">
+    <div className="min-h-screen bg-[#1c1c1c] flex flex-col items-center justify-center p-6 text-[#ededed]">
       
-      {/* NEW: Back to Portal Button */}
-      <button 
-        onClick={() => navigate('/portal')}
-        className="absolute top-6 left-6 flex items-center gap-2 text-[#a1a1a1] hover:text-[#ededed] transition-colors text-sm font-medium bg-[#171717] px-4 py-2 rounded-lg border border-[#2e2e2e] hover:border-[#444]"
-      >
-        <Home className="w-4 h-4" />
-        Back to Portal
-      </button>
+      {/* Added relative positioning to the card to constrain the absolute Home button */}
+      <div className="relative bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-8 rounded-2xl text-center shadow-xl">
+        
+        {/* NEW: Back to Portal Button top-right corner of the card */}
+        <button 
+          onClick={() => navigate('/portal')}
+          className="absolute top-5 right-5 p-2 bg-[#1c1c1c] border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed] hover:border-[#444] rounded-lg transition-all"
+          title="Back to Portal"
+        >
+          <Home className="w-4 h-4" />
+        </button>
 
-      <div className="bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-8 rounded-2xl text-center shadow-xl">
         <h2 className="text-2xl font-bold text-[#ededed] mb-1 tracking-tight">System Access</h2>
         <p className="text-[#a1a1a1] text-sm mb-6">
           {isRegistering ? 'Create a new account.' : 'Login to access the dashboard.'}
