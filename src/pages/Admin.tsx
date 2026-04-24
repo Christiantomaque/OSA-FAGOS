@@ -38,6 +38,7 @@ type ServiceRecord = {
   scheduledEndTime?: string;
   taskId?: string;
   creditHours: number;
+  earnedHours?: number;
   staffName?: string;
   status: 'pending' | 'verified' | 'active';
   startTime?: any;
@@ -484,10 +485,51 @@ export default function Admin() {
     }
   };
 
+    // Auto clock-out if past scheduled end time
+  useEffect(() => {
+    const interval = setInterval(() => {
+      records.forEach(r => {
+        if (r.status === 'active' && r.scheduledEndTime) {
+           const now = new Date();
+           const baseDate = new Date(r.date || now);
+           const schEndStr = r.scheduledEndTime;
+           const isPM = schEndStr.toLowerCase().includes('pm');
+           const isAM = schEndStr.toLowerCase().includes('am');
+           let [hoursStr, minutesStr] = schEndStr.replace(/am|pm/i, '').trim().split(':');
+           let hours = parseInt(hoursStr, 10);
+           const minutes = parseInt(minutesStr, 10);
+           if (isPM && hours < 12) hours += 12;
+           if (isAM && hours === 12) hours = 0;
+           
+           const schEndObj = new Date(baseDate);
+           schEndObj.setHours(hours, minutes, 0, 0);
+           
+           if (r.scheduledStartTime) {
+             const schStartStr = r.scheduledStartTime;
+             const sIsPM = schStartStr.toLowerCase().includes('pm');
+             let [sHoursStr] = schStartStr.replace(/am|pm/i, '').trim().split(':');
+             let sHours = parseInt(sHoursStr, 10);
+             if (sIsPM && sHours < 12) sHours += 12;
+             if (hours < sHours) schEndObj.setDate(schEndObj.getDate() + 1);
+           }
+           
+           if (now.getTime() >= schEndObj.getTime()) {
+             handleClockOut(r);
+           }
+        }
+      });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [records]);
+
   const handleStartSession = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      let hours = now.getHours();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12; 
+      const timeString = `${String(hours).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${ampm}`;
       
       const payload: any = {
         startTime: now.toISOString(),
@@ -495,7 +537,7 @@ export default function Admin() {
         updatedAt: serverTimestamp()
       };
 
-      if (!(record as any).accumulatedHours && !record.timeIn?.includes(':')) {
+      if (!record.earnedHours && !record.timeIn?.includes(':')) {
          payload.timeIn = timeString;
       } else if (!record.timeIn) {
          payload.timeIn = timeString;
@@ -827,9 +869,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         }
       }
       
-      acc[r.studentNo].totalHours += r.creditHours;
+      acc[r.studentNo].totalHours += r.earnedHours || 0;
       if (r.status === 'verified') {
-        acc[r.studentNo].verifiedHours += r.creditHours;
+        acc[r.studentNo].verifiedHours += r.earnedHours || 0;
       }
       acc[r.studentNo].records.push(r);
       acc[r.studentNo].hasNameMismatch = (acc[r.studentNo].allNames?.length || 0) > 1;
@@ -1338,7 +1380,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                              {r.bracket && <div><span className="text-[#666] mr-1">Bracket:</span>{r.bracket}</div>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
+                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">
+                              {r.earnedHours !== undefined ? r.earnedHours : 0}h <span className="text-sm font-normal text-[#a1a1a1]">/ {r.creditHours}h</span>
+                           </td>
                         <td className="px-6 py-4">
                            <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
                            {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
@@ -1364,15 +1408,15 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                   else handleClockOut(r);
                                 }}
                                 className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                                  r.creditHours >= 20 
+                                  (r.earnedHours !== undefined && r.earnedHours >= r.creditHours) 
                                     ? 'bg-gray-600 cursor-not-allowed text-white' 
                                     : !checkIsWithinSchedule(r)
                                       ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
                                       : r.status === 'pending' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
                                 }`}
-                                disabled={r.creditHours >= 20}
+                                disabled={(r.earnedHours !== undefined && r.earnedHours >= r.creditHours)}
                                 title={
-                                  r.creditHours >= 20 
+                                  (r.earnedHours !== undefined && r.earnedHours >= r.creditHours) 
                                     ? "Completed" 
                                     : !checkIsWithinSchedule(r) 
                                       ? "Outside assigned schedule" 
@@ -1380,7 +1424,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                 }
                               >
                                 <Clock className="w-3 h-3" /> 
-                                {r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? ((r as any).accumulatedHours > 0 ? 'Continue' : 'Start Now') : 'Stop Time')}
+                                {(r.earnedHours !== undefined && r.earnedHours >= r.creditHours) ? 'Completed' : (r.status === 'pending' ? ((r.earnedHours && r.earnedHours > 0) ? 'Continue' : 'Start Now') : 'Stop Time')}
                               </button>
                             )}
                             
@@ -1432,7 +1476,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
-                        <div className="font-bold text-[#3ecf8e] text-xl">{r.creditHours}h</div>
+                        <div className="font-bold text-[#3ecf8e] text-xl">
+                            {r.earnedHours !== undefined ? r.earnedHours : 0}h <span className="text-sm font-normal text-[#a1a1a1]">/ {r.creditHours}h</span>
+                          </div>
                       </div>
                     </div>
                     
@@ -1460,15 +1506,15 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               else handleClockOut(r);
                             }}
                             className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                              r.creditHours >= 20 
+                              (r.earnedHours !== undefined && r.earnedHours >= r.creditHours) 
                                 ? 'bg-gray-600 cursor-not-allowed text-white' 
                                 : !checkIsWithinSchedule(r)
                                   ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
                                   : r.status === 'pending' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
                             }`}
-                            disabled={r.creditHours >= 20}
+                            disabled={(r.earnedHours !== undefined && r.earnedHours >= r.creditHours)}
                             title={
-                              r.creditHours >= 20 
+                              (r.earnedHours !== undefined && r.earnedHours >= r.creditHours) 
                                 ? "Completed" 
                                 : !checkIsWithinSchedule(r) 
                                   ? "Outside assigned schedule" 
@@ -1476,7 +1522,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                             }
                           >
                             <Clock className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? ((r as any).accumulatedHours > 0 ? 'Continue' : 'Start') : 'Stop')}</span>
+                            <span className="text-[10px] font-bold uppercase">{(r.earnedHours !== undefined && r.earnedHours >= r.creditHours) ? 'Completed' : (r.status === 'pending' ? ((r.earnedHours && r.earnedHours > 0) ? 'Continue' : 'Start Now') : 'Stop Time')}</span>
                           </button>
                         )}
                         <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
