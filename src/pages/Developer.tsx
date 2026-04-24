@@ -278,11 +278,8 @@ export default function Developer() {
           updatedAt: serverTimestamp()
         });
         showAlert("Success", "Signature uploaded successfully!", "success");
-      try {
-        // No need to manually fetchData() as onSnapshot will handle it
       } catch (err) {
         console.error(err);
-      }
         showAlert("Error", "Upload failed.", "error");
       } finally {
         setSavingSignature(false);
@@ -889,7 +886,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
             <div className="w-6 h-6 bg-[#3ecf8e] rounded flex items-center justify-center">
               <LayoutDashboard className="w-4 h-4 text-black" />
             </div>
-            OSA Dashboard
+            (Dev)  OSA Dashboard
           </div>
           <div className="text-xs text-[#a1a1a1] mt-2">{user.email}</div>
         </div>

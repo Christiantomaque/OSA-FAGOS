@@ -121,7 +121,7 @@ export default function Portal() {
     const isFutureDate = t.date > today;
     const isTodayAndNotExpired = t.date === today && t.endTime > currentTime;
 
-    return (isFutureDate || isTodayAndNotExpired);
+    return !isFull && (isFutureDate || isTodayAndNotExpired);
   });
 
   const selectedTask = tasks.find(t => t.id === watchTaskId);

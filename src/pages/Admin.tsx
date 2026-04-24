@@ -278,11 +278,8 @@ export default function Admin() {
           updatedAt: serverTimestamp()
         });
         showAlert("Success", "Signature uploaded successfully!", "success");
-      try {
-        // No need to manually fetchData() as onSnapshot will handle it
       } catch (err) {
         console.error(err);
-      }
         showAlert("Error", "Upload failed.", "error");
       } finally {
         setSavingSignature(false);
