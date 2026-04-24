@@ -26,9 +26,9 @@ import SignatureCanvas from 'react-signature-canvas';
 import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
-// --- Image Imports ---
-import cdmLogo from '../logo/images/cdmlogo.png';
-import osaLogo from '../logo/images/osalogo.png';
+// --- Image Placeholders (Replace with local imports once files are uploaded) ---
+const cdmLogo = "https://placehold.co/200x200/1c1c1c/ededed?text=CDM";
+const osaLogo = "https://placehold.co/200x200/1c1c1c/3ecf8e?text=OSA";
 
 // --- Types ---
 type Task = {
@@ -191,7 +191,7 @@ export default function Portal() {
             <img 
               src={cdmLogo} 
               alt="CDM Logo" 
-              className="w-12 h-12 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md" 
+              className="w-12 h-15 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md" 
             />
             
             {/* Center Text */}
@@ -209,7 +209,7 @@ export default function Portal() {
             <img 
               src={osaLogo} 
               alt="OSA Logo" 
-              className="w-12 h-13 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md scale-170" 
+              className="w-12 h-16 sm:w-20 sm:h-20 object-contain shrink-0 drop-shadow-md scale-170" 
             />
 
           </div>
@@ -421,7 +421,7 @@ export default function Portal() {
           {/* --- FOOTER --- */}
           <div className="pt-6 border-t border-[#2e2e2e] flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <a href="/admin" className="text-[10px] uppercase font-bold text-[#3ecf8e] hover:text-[#ededed] tracking-widest transition-colors border border-[#3ecf8e]/20 px-3 py-1.5 rounded-md bg-[#3ecf8e]/5">Admin Login</a>
+              <a href="/login" className="text-[10px] uppercase font-bold text-[#3ecf8e] hover:text-[#ededed] tracking-widest transition-colors border border-[#3ecf8e]/20 px-3 py-1.5 rounded-md bg-[#3ecf8e]/5">Staff Access</a>
               <button 
                 disabled={submitting || !selectedTask}
                 className="bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-30 disabled:cursor-not-allowed text-black text-sm font-bold px-8 py-3 rounded-md transition-all flex items-center gap-2 shadow-lg shadow-[#3ecf8e]/10"
