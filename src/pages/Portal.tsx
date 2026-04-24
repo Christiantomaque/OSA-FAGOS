@@ -78,7 +78,7 @@ export default function Portal() {
       const counts: Record<string, number> = {};
       snapshot.docs.forEach((doc: any) => {
         const data = doc.data();
-        if (data.taskId) {
+        if (data.taskId && data.status === 'verified') {
           counts[data.taskId] = (counts[data.taskId] || 0) + 1;
         }
       });

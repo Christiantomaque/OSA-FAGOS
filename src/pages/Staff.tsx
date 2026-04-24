@@ -763,7 +763,7 @@ export default function Staff() {
                       <div className="flex flex-col items-end">
                         <div className="flex items-center gap-1.5 text-[9px] font-bold text-[#a1a1a1] mb-1">
                           <Users className="w-2.5 h-2.5" />
-                          <span>{records.filter(r => r.taskId === t.id).length} / {t.capacity || 1}</span>
+                          <span>{records.filter(r => r.taskId === t.id && r.status === 'verified').length} / {t.capacity || 1}</span>
                         </div>
                         <div className="text-xl font-bold text-[#3ecf8e]">{t.duration} hrs</div>
                       </div>

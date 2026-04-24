@@ -1115,7 +1115,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                           <td className="px-3 py-1.5">
                             <div className="flex items-center gap-1">
                               <Users className="w-2.5 h-2.5 text-[#a1a1a1]" />
-                              <span className="text-[9px] font-bold text-[#ededed]">{records.filter(r => r.taskId === t.id).length} / {t.capacity || 1}</span>
+                              <span className="text-[9px] font-bold text-[#ededed]">{records.filter(r => r.taskId === t.id && r.status === 'verified').length} / {t.capacity || 1}</span>
                             </div>
                           </td>
                           <td className="px-3 py-1.5 text-[#3ecf8e] font-bold text-[10px]">{t.duration?.toFixed(1)} hrs</td>
