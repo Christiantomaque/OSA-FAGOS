@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Edit2, Trash2, History, Search, Settings, Upload, Menu, X } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useRef } from 'react';
-import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM } from '../lib/utils';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 
@@ -306,11 +306,16 @@ export default function Staff() {
         data.staffName = currentMember?.displayName || user?.displayName || user?.email || '';
       }
 
+      let isoStart = data.startTime;
+      let isoEnd = data.endTime;
+      if (data.startTime && !data.startTime.includes('T')) isoStart = new Date(`${data.date}T${data.startTime}:00Z`).toISOString();
+      if (data.endTime && !data.endTime.includes('T')) isoEnd = new Date(`${data.date}T${data.endTime}:00Z`).toISOString();
+
       const taskData = {
         title: data.title,
         date: data.date,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startTime: isoStart,
+        endTime: isoEnd,
         staffName: data.staffName,
         capacity: Number(data.capacity) || 1,
         duration: Number(durationHours.toFixed(2)),
@@ -342,8 +347,8 @@ export default function Staff() {
     setEditingTask(task);
     setValue('title', task.title);
     setValue('date', task.date);
-    setValue('startTime', task.startTime);
-    setValue('endTime', task.endTime);
+    setValue('startTime', getHHMM(task.startTime));
+    setValue('endTime', getHHMM(task.endTime));
     setValue('staffName', task.staffName);
     setValue('capacity', task.capacity || 1);
 
@@ -407,7 +412,7 @@ export default function Staff() {
 
     // Strict Time Check
     const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    return currentTimeStr >= task.startTime && currentTimeStr <= task.endTime;
+    return currentTimeStr >= getHHMM(task.startTime) && currentTimeStr <= getHHMM(task.endTime);
   };
 
   const handleStartSession = async (record: ServiceRecord) => {
@@ -433,22 +438,22 @@ export default function Staff() {
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      // Use new Date(record.timeIn) to parse ISO string correctly
+      const startTime = new Date(record.timeIn);
+      const startH = startTime.getHours();
+      const startM = startTime.getMinutes();
       
-      const [startH, startM] = record.timeIn.split(':').map(Number);
-      const [endH, endM] = currentTime.split(':').map(Number);
+      const endH = now.getHours();
+      const endM = now.getMinutes();
       
-      let durationHours = 0;
-      if (!isNaN(startH) && !isNaN(endH)) {
-        durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
-        if (durationHours < 0) durationHours += 24;
-      }
+      let durationHours = (endH + endM / 60) - (startH + startM / 60);
+      if (durationHours < 0) durationHours += 24;
 
       // Late Penalty Logic
       if (record.scheduledEndTime) {
-        const [schEndH, schEndM] = record.scheduledEndTime.split(':').map(Number);
+        const [schEndH, schEndM] = getHHMM(record.scheduledEndTime).split(':').map(Number);
         const schEndTotal = schEndH * 60 + schEndM;
-        const actualEndTotal = now.getHours() * 60 + now.getMinutes();
+        const actualEndTotal = endH * 60 + endM;
         
         if (actualEndTotal > schEndTotal) {
            durationHours = (schEndH + schEndM / 60) - (startH + startM / 60);
@@ -459,16 +464,16 @@ export default function Staff() {
       const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
       
       await updateDoc(doc(db, 'service_records', record.id), {
-        timeOut: currentTime,
+        timeOut: now.toISOString(),
         creditHours: creditHours,
         status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
       });
       // Result handled by onSnapshot
       showAlert("Success", "Student clocked out successfully.", "success");
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      showAlert("Error", "Failed to clock out student.", "error");
+      showAlert("Error", `Failed to clock out student: ${e.message || "Unknown error"}`, "error");
     }
   };
 
@@ -476,15 +481,27 @@ export default function Staff() {
     try {
       const { id, ...payload } = data;
 
-      // Calculate duration
-      const [startH, startM] = data.timeIn.split(':').map(Number);
-      const [endH, endM] = data.timeOut.split(':').map(Number);
-      
-      let durationHours = 0;
-      if (!isNaN(startH) && !isNaN(endH)) {
-        durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
-        if (durationHours < 0) durationHours += 24;
+      // If they are just "HH:MM", we need to prepend the date
+      let startDateTime: Date;
+      let endDateTime: Date;
+
+      if (data.timeIn.includes(':') && !data.timeIn.includes('T')) {
+          startDateTime = new Date(`${data.date}T${data.timeIn}:00Z`);
+      } else {
+          startDateTime = new Date(data.timeIn);
       }
+
+      if (data.timeOut.includes(':') && !data.timeOut.includes('T')) {
+          endDateTime = new Date(`${data.date}T${data.timeOut}:00Z`);
+      } else {
+          endDateTime = new Date(data.timeOut);
+      }
+
+      payload.timeIn = startDateTime.toISOString();
+      payload.timeOut = endDateTime.toISOString();
+
+      // Calculate duration
+      let durationHours = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
       
       // Cap at 20 hours as requested
       payload.creditHours = Math.min(20, Number(durationHours.toFixed(1)));
@@ -493,9 +510,9 @@ export default function Staff() {
       setEditingRecord(null);
       // Result handled by onSnapshot
       showAlert("Success", "Service log updated successfully.", "success");
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      showAlert("Error", "Failed to update service log.", "error");
+      showAlert("Error", `Failed to update service log: ${e.message || "Unknown error"}`, "error");
     }
   };
 

@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Edit2, Trash2, History, Search, Settings, Upload, Menu, X } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useRef } from 'react';
-import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM } from '../lib/utils';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 
@@ -306,11 +306,16 @@ export default function Staff() {
         data.staffName = currentMember?.displayName || user?.displayName || user?.email || '';
       }
 
+      let isoStart = data.startTime;
+      let isoEnd = data.endTime;
+      if (data.startTime && !data.startTime.includes('T')) isoStart = new Date(`${data.date}T${data.startTime}:00Z`).toISOString();
+      if (data.endTime && !data.endTime.includes('T')) isoEnd = new Date(`${data.date}T${data.endTime}:00Z`).toISOString();
+
       const taskData = {
         title: data.title,
         date: data.date,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startTime: isoStart,
+        endTime: isoEnd,
         staffName: data.staffName,
         capacity: Number(data.capacity) || 1,
         duration: Number(durationHours.toFixed(2)),
@@ -342,8 +347,8 @@ export default function Staff() {
     setEditingTask(task);
     setValue('title', task.title);
     setValue('date', task.date);
-    setValue('startTime', task.startTime);
-    setValue('endTime', task.endTime);
+    setValue('startTime', getHHMM(task.startTime));
+    setValue('endTime', getHHMM(task.endTime));
     setValue('staffName', task.staffName);
     setValue('capacity', task.capacity || 1);
 
@@ -407,7 +412,7 @@ export default function Staff() {
 
     // Strict Time Check
     const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    return currentTimeStr >= task.startTime && currentTimeStr <= task.endTime;
+    return currentTimeStr >= getHHMM(task.startTime) && currentTimeStr <= getHHMM(task.endTime);
   };
 
   const handleStartSession = async (record: ServiceRecord) => {
@@ -444,7 +449,7 @@ export default function Staff() {
 
       // Late Penalty Logic
       if (record.scheduledEndTime) {
-        const [schEndH, schEndM] = record.scheduledEndTime.split(':').map(Number);
+        const [schEndH, schEndM] = getHHMM(record.scheduledEndTime).split(':').map(Number);
         const schEndTotal = schEndH * 60 + schEndM;
         const actualEndTotal = endH * 60 + endM;
         
