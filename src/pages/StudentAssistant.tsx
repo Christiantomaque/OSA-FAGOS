@@ -868,11 +868,12 @@ export default function Staff() {
                       ).map(r => (
                         <tr key={r.id} className="hover:bg-[#1c1c1c]">
                           <td className="px-6 py-4">
-                            <div className="font-bold text-[#ededed]">{r.studentName}</div>
+                            <div className="font-bold text-[#ededed]"><span className="text-[#a1a1a1] text-[10px] font-normal mr-1">Full Name:</span>{r.studentName}</div>
                             <div className="text-[10px] text-[#a1a1a1] space-y-0.5 mt-1 font-mono">
-                               <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
-                               {r.studentEmail && <div>{r.studentEmail}</div>}
-                               {r.bracket && <div>Bracket: {r.bracket}</div>}
+                               <div><span className="text-[#666] mr-1">Student No.:</span>{r.studentNo}</div>
+                               <div><span className="text-[#666] mr-1">Program:</span>{r.program}{r.section ? ` / Section: ${r.section}` : ''}</div>
+                               {r.studentEmail && <div><span className="text-[#666] mr-1">Email Address:</span>{r.studentEmail}</div>}
+                               {r.bracket && <div><span className="text-[#666] mr-1">Bracket:</span>{r.bracket}</div>}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
@@ -962,19 +963,21 @@ export default function Staff() {
                       <div className="flex justify-between items-start gap-4">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                             <div className="font-bold text-[#ededed] truncate">{r.studentName}</div>
+                             <div className="font-bold text-[#ededed] truncate"><span className="text-[#a1a1a1] text-[10px] font-normal mr-1">Full Name:</span>{r.studentName}</div>
                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0 ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
                                {r.status}
                              </span>
                           </div>
                           <div className="text-[10px] text-[#a1a1a1] mt-1 space-y-0.5 font-mono">
-                             <div>{r.studentNo} • {r.program}{r.section ? `/${r.section}` : ''}</div>
-                             {r.studentEmail && <div>{r.studentEmail}</div>}
-                             {r.bracket && <div>Bracket: {r.bracket}</div>}
+                             <div><span className="text-[#666] mr-1">Student No.:</span>{r.studentNo}</div>
+                             <div><span className="text-[#666] mr-1">Program:</span>{r.program}{r.section ? ` / Section: ${r.section}` : ''}</div>
+                             {r.studentEmail && <div><span className="text-[#666] mr-1">Email Address:</span>{r.studentEmail}</div>}
+                             {r.bracket && <div><span className="text-[#666] mr-1">Bracket:</span>{r.bracket}</div>}
                           </div>
                         </div>
-                        <div className="text-right shrink-0 font-bold text-[#3ecf8e] text-xl">
-                          {r.creditHours}h
+                        <div className="text-right shrink-0">
+                          <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
+                          <div className="font-bold text-[#3ecf8e] text-xl">{r.creditHours}h</div>
                         </div>
                       </div>
                       
