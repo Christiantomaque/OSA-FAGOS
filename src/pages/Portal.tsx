@@ -3,7 +3,7 @@ import { collection, query, addDoc, serverTimestamp, orderBy, db, onSnapshot } f
 import { Loader2, Plus, Clock, KeySquare, Calendar, CheckCircle2, ChevronDown, PenTool, Eraser } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM } from '../lib/utils';
 import SignatureCanvas from 'react-signature-canvas';
 import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
@@ -100,8 +100,9 @@ export default function Portal() {
     const claimCount = taskClaimCounts[t.id] || 0;
     const isFull = claimCount >= (t.capacity || 1);
     
+    const taskEndHHMM = getHHMM(t.endTime);
     const isFutureDate = t.date > today;
-    const isTodayAndNotExpired = t.date === today && t.endTime > currentTime;
+    const isTodayAndNotExpired = t.date === today && taskEndHHMM > currentTime;
 
     return !isFull && (isFutureDate || isTodayAndNotExpired);
   });
