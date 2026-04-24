@@ -308,8 +308,15 @@ export default function Staff() {
 
       let isoStart = data.startTime;
       let isoEnd = data.endTime;
-      if (data.startTime && !data.startTime.includes('T')) isoStart = new Date(`${data.date}T${data.startTime}:00Z`).toISOString();
-      if (data.endTime && !data.endTime.includes('T')) isoEnd = new Date(`${data.date}T${data.endTime}:00Z`).toISOString();
+      if (data.startTime && !data.startTime.includes('T')) {
+         const startObj = new Date(`${data.date}T${data.startTime}:00`);
+         const endObj = new Date(`${data.date}T${data.endTime}:00`);
+         if (endObj.getTime() <= startObj.getTime()) {
+            endObj.setDate(endObj.getDate() + 1);
+         }
+         isoStart = startObj.toISOString();
+         isoEnd = endObj.toISOString();
+      }
 
       const taskData = {
         title: data.title,
@@ -399,20 +406,29 @@ export default function Staff() {
   };
 
   const checkIsWithinSchedule = (record: ServiceRecord) => {
-    // Find the original task to get the strict schedule bounds
-    const task = tasks.find(t => t.title === record.taskTitle && t.date === record.date);
-    if (!task) return true; // If the parent task was deleted, allow manual override
+    if (record.status === 'active') return true;
+
+    let startObj = record.scheduledStartTime ? new Date(record.scheduledStartTime) : null;
+    let endObj = record.scheduledEndTime ? new Date(record.scheduledEndTime) : null;
+    
+    if (!startObj || !endObj) {
+      const task = tasks.find(t => t.title === record.taskTitle && t.date === record.date);
+      if (task && task.startTime && task.endTime) {
+         startObj = new Date(task.startTime);
+         endObj = new Date(task.endTime);
+      }
+    }
+
+    if (!startObj || !endObj) return true;
 
     const now = new Date();
-    // Format current date to YYYY-MM-DD
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    // Allow starting 15 minutes before
+    if (endObj.getTime() <= startObj.getTime()) {
+      endObj.setDate(endObj.getDate() + 1);
+    }
+    const startWindow = new Date(startObj.getTime() - 15 * 60000);
 
-    // Strict Date Check
-    if (task.date !== today) return false;
-
-    // Strict Time Check
-    const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    return currentTimeStr >= getHHMM(task.startTime) && currentTimeStr <= getHHMM(task.endTime);
+    return now.getTime() >= startWindow.getTime() && now.getTime() <= endObj.getTime();
   };
 
   const handleStartSession = async (record: ServiceRecord) => {
@@ -438,28 +454,23 @@ export default function Staff() {
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      // Use new Date(record.timeIn) to parse ISO string correctly
       const startTime = new Date(record.timeIn);
-      const startH = startTime.getHours();
-      const startM = startTime.getMinutes();
       
-      const endH = now.getHours();
-      const endM = now.getMinutes();
-      
-      let durationHours = (endH + endM / 60) - (startH + startM / 60);
-      if (durationHours < 0) durationHours += 24;
+      let durationHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
 
       // Late Penalty Logic
       if (record.scheduledEndTime) {
-        const [schEndH, schEndM] = getHHMM(record.scheduledEndTime).split(':').map(Number);
-        const schEndTotal = schEndH * 60 + schEndM;
-        const actualEndTotal = endH * 60 + endM;
+        const schEndObj = new Date(record.scheduledEndTime);
+        if (schEndObj.getTime() <= (record.scheduledStartTime ? new Date(record.scheduledStartTime).getTime() : startTime.getTime())) {
+           schEndObj.setDate(schEndObj.getDate() + 1);
+        }
         
-        if (actualEndTotal > schEndTotal) {
-           durationHours = (schEndH + schEndM / 60) - (startH + startM / 60);
-           if (durationHours < 0) durationHours += 24;
+        if (now.getTime() > schEndObj.getTime()) {
+           durationHours = (schEndObj.getTime() - startTime.getTime()) / (1000 * 60 * 60);
         }
       }
+      
+      if (durationHours < 0) durationHours = 0;
       
       const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
       
@@ -486,13 +497,16 @@ export default function Staff() {
       let endDateTime: Date;
 
       if (data.timeIn.includes(':') && !data.timeIn.includes('T')) {
-          startDateTime = new Date(`${data.date}T${data.timeIn}:00Z`);
+          startDateTime = new Date(`${data.date}T${data.timeIn}:00`);
       } else {
           startDateTime = new Date(data.timeIn);
       }
 
       if (data.timeOut.includes(':') && !data.timeOut.includes('T')) {
-          endDateTime = new Date(`${data.date}T${data.timeOut}:00Z`);
+          endDateTime = new Date(`${data.date}T${data.timeOut}:00`);
+          if (endDateTime.getTime() <= startDateTime.getTime()) {
+             endDateTime.setDate(endDateTime.getDate() + 1);
+          }
       } else {
           endDateTime = new Date(data.timeOut);
       }
