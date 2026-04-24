@@ -173,7 +173,7 @@ export default function Portal() {
             <img 
               src={cdmLogo} 
               alt="CDM Logo" 
-              className="w-12 h-12 sm:w-20 sm:h-20 -mt-1 sm:-mt-2 object-contain shrink-0 drop-shadow-md" 
+              className="w-12 h-12 sm:w-20 sm:h-20 -mt-3 sm:-mt-4 object-contain shrink-0 drop-shadow-md" 
             />
             
             {/* Center Text */}
@@ -191,7 +191,7 @@ export default function Portal() {
             <img 
               src={osaLogo} 
               alt="OSA Logo" 
-              className="w-12 h-12 sm:w-20 sm:h-20 -mt-7 sm:-mt-10 object-contain shrink-0 drop-shadow-md scale-170 origin-top" 
+              className="w-12 h-14 sm:w-20 sm:h-22 -mt-11 sm:-mt-14 object-contain shrink-0 drop-shadow-md scale-170 origin-top" 
             />
 
           </div>
