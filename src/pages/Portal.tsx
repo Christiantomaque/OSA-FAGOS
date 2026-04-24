@@ -38,6 +38,7 @@ type FormData = {
 export default function Portal() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskClaimCounts, setTaskClaimCounts] = useState<Record<string, number>>({});
+  const [studentClaims, setStudentClaims] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -57,6 +58,7 @@ export default function Portal() {
   });
 
   const watchTaskId = watch("taskId");
+  const watchStudentNo = watch("studentNo");
 
   // --- Real-Time Data Sync ---
   useEffect(() => {
@@ -76,13 +78,20 @@ export default function Portal() {
     // 2. Real-time listener for Service Records to track task claims
     const unsubRecords = onSnapshot(collection(db, 'service_records'), (snapshot: any) => {
       const counts: Record<string, number> = {};
+      const claims: Record<string, string[]> = {};
       snapshot.docs.forEach((doc: any) => {
         const data = doc.data();
-        if (data.taskId && data.status === 'verified') {
+        if (data.taskId) {
           counts[data.taskId] = (counts[data.taskId] || 0) + 1;
+          if (data.studentNo) {
+            const num = String(data.studentNo).trim();
+            if (!claims[num]) claims[num] = [];
+            claims[num].push(data.taskId);
+          }
         }
       });
       setTaskClaimCounts(counts);
+      setStudentClaims(claims);
     });
 
     return () => {
@@ -104,7 +113,16 @@ export default function Portal() {
     const isFutureDate = t.date > today;
     const isTodayAndNotExpired = t.date === today && taskEndHHMM > currentTime;
 
-    return !isFull && (isFutureDate || isTodayAndNotExpired);
+    // Check if the current student has already claimed this task
+    let alreadyClaimed = false;
+    if (watchStudentNo) {
+      const studentNoStr = String(watchStudentNo).trim();
+      if (studentClaims[studentNoStr] && studentClaims[studentNoStr].includes(t.id)) {
+        alreadyClaimed = true;
+      }
+    }
+
+    return !isFull && !alreadyClaimed && (isFutureDate || isTodayAndNotExpired);
   });
 
   const selectedTask = tasks.find(t => t.id === watchTaskId);
@@ -119,6 +137,16 @@ export default function Portal() {
         showAlert("Wait!", "Please provide your signature on the signature pad.", "warning");
         setSubmitting(false);
         return;
+      }
+
+      if (data.studentNo) {
+        const studentNoStr = String(data.studentNo).trim();
+        if (studentClaims[studentNoStr] && studentClaims[studentNoStr].includes(selectedTask.id)) {
+          showAlert("Duplicate Request", "You have already claimed this task. Please wait for verification.", "error");
+          setValue("taskId", "");
+          setSubmitting(false);
+          return;
+        }
       }
 
       if ((taskClaimCounts[selectedTask.id] || 0) >= (selectedTask.capacity || 1)) {
