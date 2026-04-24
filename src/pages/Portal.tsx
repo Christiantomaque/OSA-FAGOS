@@ -8,9 +8,9 @@ import SignatureCanvas from 'react-signature-canvas';
 import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
-// --- Image Placeholders (Replace with local imports once files are uploaded) ---
-const cdmLogo = '../logo/images/cdmlogo.png';
-const osaLogo = '../logo/images/osalogo.png';
+// --- Image Placeholders ---
+import cdmLogo from '../logo/images/cdmlogo.png';
+import osaLogo from '../logo/images/osalogo.png';
 
 // --- Types ---
 type Task = {
