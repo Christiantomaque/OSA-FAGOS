@@ -17,6 +17,7 @@ type Task = {
   startTime: string;
   endTime: string;
   duration: number;
+  capacity: number;
   staffName: string;
   createdAt: any;
 };
@@ -33,6 +34,9 @@ type ServiceRecord = {
   date: string;
   timeIn: string;
   timeOut: string;
+  scheduledStartTime?: string;
+  scheduledEndTime?: string;
+  taskId?: string;
   creditHours: number;
   staffName?: string;
   status: 'pending' | 'verified' | 'active';
@@ -44,6 +48,7 @@ type TaskFormData = {
   date: string;
   startTime: string;
   endTime: string;
+  capacity: number;
   staffName: string;
 };
 
@@ -385,6 +390,7 @@ export default function Admin() {
         startTime: data.startTime,
         endTime: data.endTime,
         staffName: data.staffName,
+        capacity: Number(data.capacity) || 1,
         duration: Number(durationHours.toFixed(2)),
         updatedAt: serverTimestamp()
       };
@@ -420,6 +426,7 @@ export default function Admin() {
     setValue('startTime', task.startTime);
     setValue('endTime', task.endTime);
     setValue('staffName', task.staffName);
+    setValue('capacity', task.capacity || 1);
     
     // Set dropdown option based on if it matches current user
     const currentUserName = members.find(m => m.id === user?.uid)?.displayName || user?.displayName || user?.email || '';
@@ -501,8 +508,28 @@ export default function Admin() {
         durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
         if (durationHours < 0) durationHours += 24;
       }
+
+      // Late Penalty Logic
+      // If student started late relative to scheduled start, they get their actual duration.
+      // If we want to penalize them further or cap the end time:
+      if (record.scheduledEndTime) {
+        const [schEndH, schEndM] = record.scheduledEndTime.split(':').map(Number);
+        const schEndTotal = schEndH * 60 + schEndM;
+        const actualEndTotal = now.getHours() * 60 + now.getMinutes();
+        
+        // If they stayed past the scheduled end time, we only credit them up to the scheduled end
+        if (actualEndTotal > schEndTotal) {
+           const [schStartH, schStartM] = record.scheduledStartTime?.split(':').map(Number) || [startH, startM];
+           // Actual work duration capped by scheduled end
+           const creditEndH = schEndH;
+           const creditEndM = schEndM;
+           
+           durationHours = (creditEndH + creditEndM / 60) - (startH + startM / 60);
+           if (durationHours < 0) durationHours += 24;
+        }
+      }
       
-      const creditHours = Math.min(20, Number(durationHours.toFixed(1)));
+      const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
       
       await updateDoc(doc(db, 'service_records', record.id), {
         timeOut: currentTime,
@@ -974,6 +1001,16 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                 <input type="time" {...register('startTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
               </div>
               <div className="space-y-1">
+                <label className="text-[10px] font-semibold uppercase text-[#a1a1a1]">Ppl Size</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  {...register('capacity', { required: true, min: 1 })} 
+                  className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none placeholder:text-[#a1a1a1]/50" 
+                  placeholder="e.g. 5" 
+                />
+              </div>
+              <div className="space-y-1">
                 <label className="text-[10px] font-semibold uppercase text-[#a1a1a1]">Finish By</label>
                 <input type="time" {...register('endTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-1.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] outline-none [color-scheme:dark]" />
               </div>
@@ -1039,6 +1076,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       <tr>
                         <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider">Task Title</th>
                         <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider">Schedule</th>
+                        <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider">Capacity</th>
                         <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider">Duration</th>
                         <th className="px-3 py-2 text-right text-[9px] font-bold uppercase tracking-wider">Actions</th>
                       </tr>
@@ -1055,6 +1093,12 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                           <td className="px-3 py-1.5 text-[#a1a1a1] font-mono text-[9px]">
                             <div className="text-[#ededed] mb-0.5">{formatDate(t.date)}</div>
                             <div>{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <div className="flex items-center gap-1">
+                              <Users className="w-2.5 h-2.5 text-[#a1a1a1]" />
+                              <span className="text-[9px] font-bold text-[#ededed]">{records.filter(r => r.taskId === t.id).length} / {t.capacity || 1}</span>
+                            </div>
                           </td>
                           <td className="px-3 py-1.5 text-[#3ecf8e] font-bold text-[10px]">{t.duration?.toFixed(1)} hrs</td>
                           <td className="px-3 py-1.5 text-right">

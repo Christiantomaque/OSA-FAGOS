@@ -1,6 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, addDoc, serverTimestamp, orderBy, db, onSnapshot } from '../lib/supabase';
-import { Loader2, Plus, Clock, KeySquare, Calendar, CheckCircle2, ChevronDown, PenTool, Eraser } from 'lucide-react';
+import { 
+  collection, 
+  query, 
+  addDoc, 
+  serverTimestamp, 
+  orderBy, 
+  db, 
+  onSnapshot 
+} from '../lib/supabase';
+import { 
+  Loader2, 
+  Plus, 
+  Clock, 
+  KeySquare, 
+  Calendar, 
+  CheckCircle2, 
+  ChevronDown, 
+  PenTool, 
+  Eraser 
+} from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDate, formatTime, getTodayYYYYMMDD } from '../lib/utils';
@@ -8,9 +26,9 @@ import SignatureCanvas from 'react-signature-canvas';
 import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
-// --- Logo nila ---
-import cdmLogo from '../logo/images/cdmlogo.png';
-import osaLogo from '../logo/images/osalogo.png';
+// --- Image Placeholders (Replace with local imports once files are uploaded) ---
+const cdmLogo = "../logo/images/cdmlogo.png";
+const osaLogo = "../logo/images/osalogo.png";
 
 // --- Types ---
 type Task = {
@@ -20,6 +38,7 @@ type Task = {
   startTime: string;
   endTime: string;
   duration: number;
+  capacity?: number;
   staffName: string;
 };
 
@@ -36,7 +55,7 @@ type FormData = {
 
 export default function Portal() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [claimedTaskIds, setClaimedTaskIds] = useState<Set<string>>(new Set());
+  const [taskClaimCounts, setTaskClaimCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -72,14 +91,16 @@ export default function Portal() {
       }
     );
 
-    // 2. Real-time listener for Service Records to track "picked" tasks
+    // 2. Real-time listener for Service Records to track task claims
     const unsubRecords = onSnapshot(collection(db, 'service_records'), (snapshot: any) => {
-      const claimed = new Set<string>();
+      const counts: Record<string, number> = {};
       snapshot.docs.forEach((doc: any) => {
         const data = doc.data();
-        if (data.taskId) claimed.add(data.taskId);
+        if (data.taskId) {
+          counts[data.taskId] = (counts[data.taskId] || 0) + 1;
+        }
       });
-      setClaimedTaskIds(claimed);
+      setTaskClaimCounts(counts);
     });
 
     return () => {
@@ -94,11 +115,13 @@ export default function Portal() {
     const today = getTodayYYYYMMDD();
     const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    const isAlreadyPicked = claimedTaskIds.has(t.id);
+    const claimCount = taskClaimCounts[t.id] || 0;
+    const isFull = claimCount >= (t.capacity || 1);
+    
     const isFutureDate = t.date > today;
     const isTodayAndNotExpired = t.date === today && t.endTime > currentTime;
 
-    return !isAlreadyPicked && (isFutureDate || isTodayAndNotExpired);
+    return (isFutureDate || isTodayAndNotExpired);
   });
 
   const selectedTask = tasks.find(t => t.id === watchTaskId);
@@ -115,8 +138,8 @@ export default function Portal() {
         return;
       }
 
-      if (claimedTaskIds.has(selectedTask.id)) {
-        showAlert("Task Unavailable", "This task was just claimed by another student. Please select another one.", "error");
+      if ((taskClaimCounts[selectedTask.id] || 0) >= (selectedTask.capacity || 1)) {
+        showAlert("Task Unavailable", "This task has reached its maximum capacity. Please select another one.", "error");
         setValue("taskId", "");
         setSubmitting(false);
         return;
@@ -144,6 +167,8 @@ export default function Portal() {
         date: selectedTask.date,
         timeIn: selectedTask.startTime,
         timeOut: selectedTask.endTime,
+        scheduledStartTime: selectedTask.startTime,
+        scheduledEndTime: selectedTask.endTime,
         creditHours: selectedTask.duration,
         studentSignature: signatureData,
         status: "pending",
@@ -173,7 +198,7 @@ export default function Portal() {
             <img 
               src={cdmLogo} 
               alt="CDM Logo" 
-              className="w-12 h-12 sm:w-20 sm:h-20 -mt-3 sm:-mt-4 object-contain shrink-0 drop-shadow-md" 
+              className="w-12 h-12 sm:w-20 sm:h-20 -mt-8 sm:-mt-12 object-contain shrink-0 drop-shadow-md" 
             />
             
             {/* Center Text */}
@@ -184,14 +209,14 @@ export default function Portal() {
               <div className="my-3 sm:my-4 h-px w-16 bg-[#3ecf8e] mx-auto rounded-full"></div>
               
               <h2 className="text-xs sm:text-md text-[#3ecf8e] font-semibold uppercase">Office of Student Affairs</h2>
-              <h3 className="text-sm sm:text-lg font-bold text-[#ededed] mt-1 sm:mt-2">SERVICE OBLIGATION COMPLETION FORM</h3>
+              <h3 className="text-[11px] sm:text-lg font-bold text-[#ededed] mt-1 sm:mt-2 whitespace-nowrap tracking-tight uppercase">SERVICE OBLIGATION COMPLETION FORM</h3>
             </div>
 
             {/* Right Logo (OSA) - Scaled up to remove transparent padding effect */}
             <img 
               src={osaLogo} 
               alt="OSA Logo" 
-              className="w-13 h-15 sm:w-21 sm:h-23 -mt-17 sm:-mt-20 object-contain shrink-0 drop-shadow-md scale-170 origin-top" 
+              className="w-12 h-12 sm:w-20 sm:h-20 -mt-16 sm:-mt-26 object-contain shrink-0 drop-shadow-md scale-170 origin-top" 
             />
 
           </div>
@@ -337,23 +362,38 @@ export default function Portal() {
                                 No tasks available for today.
                               </div>
                             ) : (
-                              activeTasks.map((t) => (
-                                <button
-                                  key={t.id}
-                                  type="button"
-                                  onClick={() => { field.onChange(t.id); setIsDropdownOpen(false); }}
-                                  className="w-full text-left p-4 hover:bg-[#3ecf8e]/10 border-b border-[#2e2e2e] last:border-0 group"
-                                >
-                                  <div className="flex justify-between items-start mb-1">
-                                    <span className="font-bold text-[#ededed] group-hover:text-[#3ecf8e]">{t.title}</span>
-                                    <span className="text-[10px] bg-[#1c1c1c] px-2 py-0.5 rounded text-[#a1a1a1]">{formatDate(t.date)}</span>
-                                  </div>
-                                  <div className="flex items-center gap-3 text-[#a1a1a1] text-[10px] uppercase font-bold">
-                                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatTime(t.startTime)} - {formatTime(t.endTime)}</span>
-                                    <span className="text-[#3ecf8e]">{t.duration.toFixed(1)} hrs</span>
-                                  </div>
-                                </button>
-                              ))
+                              activeTasks.map((t) => {
+                                const count = taskClaimCounts[t.id] || 0;
+                                const capacity = t.capacity || 1;
+                                const remaining = capacity - count;
+                                const isFull = remaining <= 0;
+
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    disabled={isFull}
+                                    onClick={() => { field.onChange(t.id); setIsDropdownOpen(false); }}
+                                    className={`w-full text-left p-4 border-b border-[#2e2e2e] last:border-0 group ${isFull ? 'opacity-40 cursor-not-allowed bg-black/20' : 'hover:bg-[#3ecf8e]/10'}`}
+                                  >
+                                    <div className="flex justify-between items-start mb-1">
+                                      <div className="flex flex-col">
+                                        <span className={`font-bold transition-colors ${isFull ? 'text-[#a1a1a1]' : 'text-[#ededed] group-hover:text-[#3ecf8e]'}`}>{t.title}</span>
+                                        {isFull ? (
+                                          <span className="text-[9px] text-red-500 font-black uppercase tracking-tighter">Full Capacity</span>
+                                        ) : (
+                                          <span className="text-[9px] text-[#3ecf8e] font-bold uppercase tracking-tighter">{remaining} slot{remaining > 1 ? 's' : ''} left</span>
+                                        )}
+                                      </div>
+                                      <span className="text-[10px] bg-[#1c1c1c] px-2 py-0.5 rounded text-[#a1a1a1]">{formatDate(t.date)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-[#a1a1a1] text-[10px] uppercase font-bold">
+                                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatTime(t.startTime)} - {formatTime(t.endTime)}</span>
+                                      <span className={isFull ? 'text-[#a1a1a1]' : 'text-[#3ecf8e]'}>{t.duration.toFixed(1)} hrs</span>
+                                    </div>
+                                  </button>
+                                );
+                              })
                             )}
                           </motion.div>
                         </>

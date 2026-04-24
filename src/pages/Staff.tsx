@@ -18,6 +18,7 @@ type Task = {
   startTime: string;
   endTime: string;
   duration: number;
+  capacity: number;
   staffName: string;
   createdAt: any;
 };
@@ -34,9 +35,12 @@ type ServiceRecord = {
   date: string;
   timeIn: string;
   timeOut: string;
-  startTime?: string; // ISO string for strict calculation
+  scheduledStartTime?: string;
+  scheduledEndTime?: string;
+  taskId?: string;
   creditHours: number;
   status: 'pending' | 'verified' | 'active';
+  startTime?: any;
   verifiedBy?: string;
   verifiedById?: string;
   verifierRole?: string;
@@ -48,6 +52,7 @@ type TaskFormData = {
   date: string;
   startTime: string;
   endTime: string;
+  capacity: number;
   staffName: string;
 };
 
@@ -307,6 +312,7 @@ export default function Staff() {
         startTime: data.startTime,
         endTime: data.endTime,
         staffName: data.staffName,
+        capacity: Number(data.capacity) || 1,
         duration: Number(durationHours.toFixed(2)),
         updatedAt: serverTimestamp()
       };
@@ -339,6 +345,7 @@ export default function Staff() {
     setValue('startTime', task.startTime);
     setValue('endTime', task.endTime);
     setValue('staffName', task.staffName);
+    setValue('capacity', task.capacity || 1);
 
     // Set dropdown option based on if it matches current user
     const currentUserName = members.find(m => m.id === user?.uid)?.displayName || user?.displayName || user?.email || '';
@@ -436,8 +443,20 @@ export default function Staff() {
         durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
         if (durationHours < 0) durationHours += 24;
       }
+
+      // Late Penalty Logic
+      if (record.scheduledEndTime) {
+        const [schEndH, schEndM] = record.scheduledEndTime.split(':').map(Number);
+        const schEndTotal = schEndH * 60 + schEndM;
+        const actualEndTotal = now.getHours() * 60 + now.getMinutes();
+        
+        if (actualEndTotal > schEndTotal) {
+           durationHours = (schEndH + schEndM / 60) - (startH + startM / 60);
+           if (durationHours < 0) durationHours += 24;
+        }
+      }
       
-      const creditHours = Math.min(20, Number(durationHours.toFixed(1)));
+      const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
       
       await updateDoc(doc(db, 'service_records', record.id), {
         timeOut: currentTime,
@@ -608,6 +627,16 @@ export default function Staff() {
                   <input type="date" {...register('date', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm [color-scheme:dark]" />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Ppl Size</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    {...register('capacity', { required: true, min: 1 })}
+                    className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none" 
+                    placeholder="e.g. 5"
+                  />
+                </div>
+                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">Time Start</label>
                   <input type="time" {...register('startTime', { required: true })} className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm [color-scheme:dark]" />
                 </div>
@@ -699,7 +728,13 @@ export default function Staff() {
                         <div>{formatTime(t.startTime)} - {formatTime(t.endTime)}</div>
                         <div className="mt-1">By: {t.staffName}</div>
                       </div>
-                      <div className="text-xl font-bold text-[#3ecf8e]">{t.duration} hrs</div>
+                      <div className="flex flex-col items-end">
+                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-[#a1a1a1] mb-1">
+                          <Users className="w-2.5 h-2.5" />
+                          <span>{records.filter(r => r.taskId === t.id).length} / {t.capacity || 1}</span>
+                        </div>
+                        <div className="text-xl font-bold text-[#3ecf8e]">{t.duration} hrs</div>
+                      </div>
                     </div>
                   </div>
                 ))}
