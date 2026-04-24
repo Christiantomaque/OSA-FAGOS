@@ -38,12 +38,9 @@ type ServiceRecord = {
   scheduledEndTime?: string;
   taskId?: string;
   creditHours: number;
-  creditedHours?: number;
-  missedHours?: number;
   staffName?: string;
   status: 'pending' | 'verified' | 'active';
   startTime?: any;
-  accumulatedTimeMs?: number;
 };
 
 type TaskFormData = {
@@ -130,65 +127,6 @@ export default function Developer() {
 
   const navigate = useNavigate();
   const { modal, showAlert, hideAlert } = useAlert();
-
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000); // 30s
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const autoTerminate = async (record: ServiceRecord) => {
-       try {
-           const schEnd = new Date(record.scheduledEndTime!);
-           if (record.scheduledStartTime) {
-               const schStart = new Date(record.scheduledStartTime);
-               if (schEnd.getTime() <= schStart.getTime()) schEnd.setDate(schEnd.getDate() + 1);
-           }
-  
-           let accumulatedMs = record.accumulatedTimeMs || 0;
-           if (record.status === 'active' && record.startTime) {
-               const startObj = new Date(record.startTime);
-               const endObj = new Date() > schEnd ? schEnd : new Date();
-               accumulatedMs += Math.max(0, endObj.getTime() - startObj.getTime());
-           }
-           
-           let durationHours = accumulatedMs / (1000 * 60 * 60);
-           durationHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
-           
-           let expectedHours = record.creditHours || 1;
-           if (record.scheduledStartTime) {
-               const schStart = new Date(record.scheduledStartTime);
-               expectedHours = (schEnd.getTime() - schStart.getTime()) / (1000 * 60 * 60);
-           }
-           const missedHours = Math.max(0, Number((expectedHours - durationHours).toFixed(1)));
-           
-           await updateDoc(doc(db, 'service_records', record.id), {
-               accumulatedTimeMs: accumulatedMs,
-               creditedHours: durationHours,
-               missedHours: missedHours,
-               status: 'pending',
-               timeOut: schEnd.toISOString(),
-               updatedAt: serverTimestamp()
-           });
-       } catch(e) {}
-    };
-
-    records.forEach(r => {
-      if (r.creditedHours === undefined && r.scheduledEndTime && r.scheduledStartTime) {
-         const schEnd = new Date(r.scheduledEndTime);
-         const schStart = new Date(r.scheduledStartTime);
-         if (schEnd.getTime() <= schStart.getTime()) {
-             schEnd.setDate(schEnd.getDate() + 1);
-         }
-         if (currentTime.getTime() > schEnd.getTime()) {
-             autoTerminate(r);
-         }
-      }
-    });
-
-  }, [records, currentTime]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -550,17 +488,12 @@ export default function Developer() {
     try {
       const now = new Date();
       
-      const updateData: any = {
+      await updateDoc(doc(db, 'service_records', record.id), {
         startTime: now.toISOString(),
+        timeIn: now.toISOString(),
         status: 'active',
         updatedAt: serverTimestamp()
-      };
-      
-      if (!record.accumulatedTimeMs) {
-         updateData.timeIn = now.toISOString();
-      }
-
-      await updateDoc(doc(db, 'service_records', record.id), updateData);
+      });
       // Result handled by onSnapshot
       showAlert("Success", "Session started.", "success");
     } catch (e: any) {
@@ -572,28 +505,43 @@ export default function Developer() {
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      const startTime = new Date(record.startTime || record.timeIn);
-      const sessionMs = Math.max(0, now.getTime() - startTime.getTime());
-      const accumulatedMs = (record.accumulatedTimeMs || 0) + sessionMs;
+      const startTime = new Date(record.timeIn);
+      
+      let durationHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
 
+      // Late Penalty Logic
+      if (record.scheduledEndTime) {
+        const schEndObj = new Date(record.scheduledEndTime);
+        if (schEndObj.getTime() <= (record.scheduledStartTime ? new Date(record.scheduledStartTime).getTime() : startTime.getTime())) {
+           schEndObj.setDate(schEndObj.getDate() + 1);
+        }
+        
+        if (now.getTime() > schEndObj.getTime()) {
+           durationHours = (schEndObj.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        }
+      }
+      
+      if (durationHours < 0) durationHours = 0;
+      
+      const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
+      
       await updateDoc(doc(db, 'service_records', record.id), {
-        accumulatedTimeMs: accumulatedMs,
-        status: 'pending', 
+        timeOut: now.toISOString(),
+        creditHours: creditHours,
+        status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
       });
       // Result handled by onSnapshot
-      showAlert("Success", "Student session paused.", "success");
+      showAlert("Success", "Student clocked out successfully.", "success");
     } catch (e: any) {
       console.error(e);
-      showAlert("Error", `Failed to pause session: ${e.message || "Unknown error"}`, "error");
+      showAlert("Error", `Failed to clock out student: ${e.message || "Unknown error"}`, "error");
     }
   };
 
   const onRecordSubmit = async (data: ServiceRecord) => {
     try {
-      const payload: any = { ...data };
-      delete payload.id;
-      delete payload.creditHours;
+      const { id, ...payload } = data;
 
       // If they are just "HH:MM", we need to prepend the date
       let startDateTime: Date;
@@ -619,23 +567,11 @@ export default function Developer() {
 
       // Calculate duration
       let durationHours = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
-      durationHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
       
-      let missedHours = 0;
-      if (payload.scheduledStartTime && payload.scheduledEndTime) {
-         const schStart = new Date(payload.scheduledStartTime as string);
-         const schEndObj = new Date(payload.scheduledEndTime as string);
-         if (schEndObj.getTime() <= schStart.getTime()) {
-             schEndObj.setDate(schEndObj.getDate() + 1);
-         }
-         const expectedHours = (schEndObj.getTime() - schStart.getTime()) / (1000 * 60 * 60);
-         missedHours = Math.max(0, Number((expectedHours - durationHours).toFixed(1)));
-      }
-      
-      payload.creditedHours = durationHours;
-      payload.missedHours = missedHours;
+      // Cap at 20 hours as requested
+      payload.creditHours = Math.min(20, Number(durationHours.toFixed(1)));
 
-      await updateDoc(doc(db, 'service_records', data.id), payload);
+      await updateDoc(doc(db, 'service_records', id), payload as any);
       setEditingRecord(null);
       // Result handled by onSnapshot
       showAlert("Success", "Service log updated successfully.", "success");
@@ -678,7 +614,7 @@ export default function Developer() {
       staffName: (r as any).staffName || 'OSA Staff',
       timeIn: formatTime(r.timeIn),
       timeOut: formatTime(r.timeOut),
-      creditHours: r.creditedHours !== undefined ? r.creditedHours : r.creditHours,
+      creditHours: r.creditHours,
       // FIX: Use the live signature if found, otherwise fall back to the saved snapshot
       verifierSignature: liveStaff?.signature || (r as any).verifierSignature,
       studentSignature: (r as any).studentSignature
@@ -774,7 +710,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
           staffName: (r as any).staffName || 'OSA Staff',
           timeIn: formatTime(r.timeIn),
           timeOut: formatTime(r.timeOut),
-          creditHours: r.creditedHours !== undefined ? r.creditedHours : r.creditHours,
+          creditHours: r.creditHours,
           verifierSignature: (r as any).verifierSignature,
           studentSignature: (r as any).studentSignature
         }))
@@ -872,9 +808,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         }
       }
       
-      acc[r.studentNo].totalHours += r.creditedHours !== undefined ? r.creditedHours : r.creditHours;
+      acc[r.studentNo].totalHours += r.creditHours;
       if (r.status === 'verified') {
-        acc[r.studentNo].verifiedHours += r.creditedHours !== undefined ? r.creditedHours : r.creditHours;
+        acc[r.studentNo].verifiedHours += r.creditHours;
       }
       acc[r.studentNo].records.push(r);
       acc[r.studentNo].hasNameMismatch = (acc[r.studentNo].allNames?.length || 0) > 1;
@@ -1383,17 +1319,10 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                              {r.bracket && <div><span className="text-[#666] mr-1">Bracket:</span>{r.bracket}</div>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="font-bold text-[#3ecf8e] text-lg">
-                            {r.creditedHours !== undefined ? r.creditedHours : 0}h <span className="text-sm font-normal text-[#a1a1a1]">/ {r.creditHours}h</span>
-                          </div>
-                          {(r.missedHours !== undefined && r.missedHours > 0) && (
-                            <div className="text-[10px] text-red-500 mt-1">Missed: {r.missedHours}h</div>
-                          )}
-                        </td>
+                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
                         <td className="px-6 py-4">
                            <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
-                           {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Published by: {r.staffName}</div>}
+                           {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
                            <div className="text-[9px] text-[#a1a1a1] font-mono mt-1 uppercase bg-[#262626] inline-block px-2 py-0.5 rounded border border-[#2e2e2e]">
                               {formatDate(r.date)} | {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
                            </div>
@@ -1416,15 +1345,15 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                   else handleClockOut(r);
                                 }}
                                 className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                                  r.creditedHours !== undefined 
+                                  r.creditHours >= 20 
                                     ? 'bg-gray-600 cursor-not-allowed text-white' 
                                     : !checkIsWithinSchedule(r)
                                       ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
                                       : r.status === 'pending' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
                                 }`}
-                                disabled={r.creditedHours !== undefined}
+                                disabled={r.creditHours >= 20}
                                 title={
-                                  r.creditedHours !== undefined 
+                                  r.creditHours >= 20 
                                     ? "Completed" 
                                     : !checkIsWithinSchedule(r) 
                                       ? "Outside assigned schedule" 
@@ -1432,7 +1361,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                 }
                               >
                                 <Clock className="w-3 h-3" /> 
-                                {r.creditedHours !== undefined ? 'Completed' : (r.status === 'pending' ? 'Start Now' : 'Stop Time')}
+                                {r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? 'Start Now' : 'Stop Time')}
                               </button>
                             )}
                             
@@ -1484,12 +1413,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
-                        <div className="font-bold text-[#3ecf8e] text-xl">
-                          {r.creditedHours !== undefined ? r.creditedHours : 0}h <span className="text-sm font-normal text-[#a1a1a1]">/ {r.creditHours}h</span>
-                        </div>
-                        {(r.missedHours !== undefined && r.missedHours > 0) && (
-                          <div className="text-[10px] text-red-400 mt-1 text-right">Missed: {r.missedHours}h</div>
-                        )}
+                        <div className="font-bold text-[#3ecf8e] text-xl">{r.creditHours}h</div>
                       </div>
                     </div>
                     
@@ -1517,15 +1441,15 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               else handleClockOut(r);
                             }}
                             className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                              r.creditedHours !== undefined 
+                              r.creditHours >= 20 
                                 ? 'bg-gray-600 cursor-not-allowed text-white' 
                                 : !checkIsWithinSchedule(r)
                                   ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
                                   : r.status === 'pending' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
                             }`}
-                            disabled={r.creditedHours !== undefined}
+                            disabled={r.creditHours >= 20}
                             title={
-                              r.creditedHours !== undefined 
+                              r.creditHours >= 20 
                                 ? "Completed" 
                                 : !checkIsWithinSchedule(r) 
                                   ? "Outside assigned schedule" 
@@ -1533,7 +1457,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                             }
                           >
                             <Clock className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase">{r.creditedHours !== undefined ? 'Completed' : (r.status === 'pending' ? 'Start' : 'Stop')}</span>
+                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (r.status === 'pending' ? 'Start' : 'Stop')}</span>
                           </button>
                         )}
                         <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
