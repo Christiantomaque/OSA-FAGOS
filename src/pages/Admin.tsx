@@ -491,45 +491,20 @@ export default function Admin() {
       records.forEach(r => {
         if (r.status === 'active' && r.scheduledEndTime) {
            const now = new Date();
-           const baseDate = new Date(r.date || now);
-           const schEndStr = r.scheduledEndTime;
-           const isPM = schEndStr.toLowerCase().includes('pm');
-           const isAM = schEndStr.toLowerCase().includes('am');
-           let [hoursStr, minutesStr] = schEndStr.replace(/am|pm/i, '').trim().split(':');
-           let hours = parseInt(hoursStr, 10);
-           const minutes = parseInt(minutesStr, 10);
-           if (isPM && hours < 12) hours += 12;
-           if (isAM && hours === 12) hours = 0;
+           const schEndObj = new Date(r.scheduledEndTime);
            
-           const schEndObj = new Date(baseDate);
-           schEndObj.setHours(hours, minutes, 0, 0);
-           
-           if (r.scheduledStartTime) {
-             const schStartStr = r.scheduledStartTime;
-             const sIsPM = schStartStr.toLowerCase().includes('pm');
-             let [sHoursStr] = schStartStr.replace(/am|pm/i, '').trim().split(':');
-             let sHours = parseInt(sHoursStr, 10);
-             if (sIsPM && sHours < 12) sHours += 12;
-             if (hours < sHours) schEndObj.setDate(schEndObj.getDate() + 1);
-           }
-           
-           if (now.getTime() >= schEndObj.getTime()) {
+           if (!isNaN(schEndObj.getTime()) && now.getTime() >= schEndObj.getTime()) {
              handleClockOut(r);
            }
         }
       });
-    }, 60000);
+    }, 10000); // Check every 10 seconds for faster auto clock-out
     return () => clearInterval(interval);
   }, [records]);
 
   const handleStartSession = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      let hours = now.getHours();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      hours = hours % 12;
-      hours = hours ? hours : 12; 
-      const timeString = `${String(hours).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${ampm}`;
       
       const payload: any = {
         startTime: now.toISOString(),
@@ -537,10 +512,10 @@ export default function Admin() {
         updatedAt: serverTimestamp()
       };
 
-      if (!record.earnedHours && !record.timeIn?.includes(':')) {
-         payload.timeIn = timeString;
+      if (!record.earnedHours && !record.timeIn?.includes('T')) {
+         payload.timeIn = now.toISOString();
       } else if (!record.timeIn) {
-         payload.timeIn = timeString;
+         payload.timeIn = now.toISOString();
       }
 
       await updateDoc(doc(db, 'service_records', record.id), payload);
@@ -563,17 +538,14 @@ export default function Admin() {
       
       let durationHours = (now.getTime() - currentSegmentStart.getTime()) / (1000 * 60 * 60);
 
-      // Late Penalty Logic
+      // Enforce scheduled end time boundary
+      let isForcedEnd = false;
       if (record.scheduledEndTime) {
         const schEndObj = new Date(record.scheduledEndTime);
-        if (schEndObj.getTime() <= (record.scheduledStartTime ? new Date(record.scheduledStartTime).getTime() : currentSegmentStart.getTime())) {
-           schEndObj.setDate(schEndObj.getDate() + 1);
-        }
         
-        if (now.getTime() > schEndObj.getTime() && currentSegmentStart.getTime() < schEndObj.getTime()) {
+        if (!isNaN(schEndObj.getTime()) && now.getTime() >= schEndObj.getTime()) {
+           isForcedEnd = true;
            durationHours = (schEndObj.getTime() - currentSegmentStart.getTime()) / (1000 * 60 * 60);
-        } else if (currentSegmentStart.getTime() >= schEndObj.getTime()) {
-           durationHours = 0;
         }
       }
       
@@ -583,11 +555,13 @@ export default function Admin() {
       const totalEarned = previousAccumulated + durationHours;
       const displayHours = Math.max(0, Math.min(20, Number(totalEarned.toFixed(2))));
       
-      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const finalTime = isForcedEnd ? new Date(record.scheduledEndTime!) : now;
+      const timeString = finalTime.toISOString(); // Store as ISO String for consistency
       
       await updateDoc(doc(db, 'service_records', record.id), {
         timeOut: timeString,
         creditHours: displayHours,
+        earnedHours: displayHours,
         accumulatedHours: totalEarned,
         status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
