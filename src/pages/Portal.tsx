@@ -27,8 +27,8 @@ import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
 // --- Image Placeholders (Replace with local imports once files are uploaded) ---
-const cdmLogo = "https://placehold.co/200x200/1c1c1c/ededed?text=CDM";
-const osaLogo = "https://placehold.co/200x200/1c1c1c/3ecf8e?text=OSA";
+const cdmLogo = "https://i.postimg.cc/85zXwzX1/cdm-logo.png";
+const osaLogo = "https://i.postimg.cc/mD83W0XV/osa-logo.png";
 
 // --- Types ---
 type Task = {

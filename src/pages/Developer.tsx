@@ -165,6 +165,24 @@ export default function Developer() {
             </div>
           </div>
 
+          <div className="bg-black/40 border-2 border-dashed border-[#1a1a1a] p-8 rounded-lg flex items-center justify-between">
+            <div>
+              <h3 className="text-white font-bold mb-1">GLOBAL_SIGNUP_LOCK</h3>
+              <p className="text-[10px] text-[#3ecf8e]/50 uppercase">Toggles state of the system-wide registration gate.</p>
+            </div>
+            <button 
+              onClick={async () => {
+                const snap = await getDoc(doc(db, 'settings', 'global'));
+                const current = snap.exists() ? snap.data().allowSignups : true;
+                await setDoc(doc(db, 'settings', 'global'), { allowSignups: !current }, { merge: true });
+                alert(`Signups are now ${!current ? 'ENABLED' : 'DISABLED'}`);
+              }}
+              className="px-6 py-3 bg-[#3ecf8e]/10 border border-[#3ecf8e]/50 hover:bg-[#3ecf8e]/20 text-[#3ecf8e] text-xs font-black uppercase tracking-widest rounded"
+            >
+              TOGGLE_REGISTRATION
+            </button>
+          </div>
+
           {/* User Directory */}
           <div className="bg-black border border-[#1a1a1a] rounded-lg overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-[#1a1a1a] bg-[#111] flex items-center justify-between">

@@ -33,6 +33,25 @@ export const createUserWithEmailAndPassword = async (authObj: any, email: string
 
 export const logout = async () => await supabase.auth.signOut();
 
+export const signInWithGoogle = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.origin + '/portal'
+        }
+    });
+    if (error) throw error;
+    return data;
+};
+
+export const sendPasswordResetEmail = async (authObj: any, email: string) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/login'
+    });
+    if (error) throw error;
+    return data;
+};
+
 export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void) => {
     const firebaseUser = (u: any): User | null => u ? { 
         uid: u.id, 

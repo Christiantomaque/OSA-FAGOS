@@ -34,8 +34,13 @@ type ServiceRecord = {
   date: string;
   timeIn: string;
   timeOut: string;
+  startTime?: string; // ISO string for strict calculation
   creditHours: number;
-  status: 'pending' | 'verified';
+  status: 'pending' | 'verified' | 'active';
+  verifiedBy?: string;
+  verifiedById?: string;
+  verifierRole?: string;
+  verifierSignature?: string;
 };
 
 type TaskFormData = {
@@ -259,8 +264,28 @@ export default function Staff() {
   const onTaskSubmit = async (data: TaskFormData) => {
     setSubmittingTask(true);
     try {
+      // --- TIME VALIDATION CHECKS ---
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      // Prevent selecting a past time if the task is scheduled for today
+      if (data.date === today && data.startTime < currentTimeStr) {
+        showAlert("Invalid Time", "You cannot schedule a task to start in the past today.", "warning");
+        setSubmittingTask(false);
+        return;
+      }
+
       const [startH, startM] = data.startTime.split(':').map(Number);
       const [endH, endM] = data.endTime.split(':').map(Number);
+
+      // Prevent the end time from being before the start time
+      if (data.endTime <= data.startTime) {
+         showAlert("Invalid Schedule", "End time must be after the start time.", "warning");
+         setSubmittingTask(false);
+         return;
+      }
+
       let durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
       if (durationHours < 0) durationHours += 24;
 
@@ -355,6 +380,43 @@ export default function Staff() {
     }
   };
 
+  const checkIsWithinSchedule = (record: ServiceRecord) => {
+    // Find the original task to get the strict schedule bounds
+    const task = tasks.find(t => t.title === record.taskTitle && t.date === record.date);
+    if (!task) return true; // If the parent task was deleted, allow manual override
+
+    const now = new Date();
+    // Format current date to YYYY-MM-DD
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    // Strict Date Check
+    if (task.date !== today) return false;
+
+    // Strict Time Check
+    const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    return currentTimeStr >= task.startTime && currentTimeStr <= task.endTime;
+  };
+
+  const handleStartSession = async (record: ServiceRecord) => {
+    try {
+      const now = new Date();
+      // Keep the HH:MM format for the 'timeIn' text column
+      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      await updateDoc(doc(db, 'service_records', record.id), {
+        startTime: now.toISOString(), // Passes a full valid timestamp string for timestamptz
+        timeIn: timeString,           // Passes "HH:MM" for your text column
+        status: 'active',
+        updatedAt: serverTimestamp()
+      });
+      // Result handled by onSnapshot
+      showAlert("Success", "Session started.", "success");
+    } catch (e: any) {
+      console.error("FULL ERROR OBJECT:", e);
+      showAlert("Error", `Failed to start session: ${e.message || "Unknown error"}`, "error");
+    }
+  };
+
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
@@ -374,9 +436,11 @@ export default function Staff() {
       await updateDoc(doc(db, 'service_records', record.id), {
         timeOut: currentTime,
         creditHours: creditHours,
+        status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
       });
       // Result handled by onSnapshot
+      showAlert("Success", "Student clocked out successfully.", "success");
     } catch (e) {
       console.error(e);
       showAlert("Error", "Failed to clock out student.", "error");
@@ -740,28 +804,58 @@ export default function Staff() {
                            <div className="text-[9px] text-[#a1a1a1] font-mono uppercase">{formatDate(r.date)}</div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                           <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-amber-500/20 text-amber-500'}`}>
+                           <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
                              {r.status}
                            </span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end items-center gap-3">
                             <div className="flex gap-1 pr-2 border-r border-[#2e2e2e]">
-                              {r.status === 'pending' && (
+                              {(r.status === 'pending' || r.status === 'active') && (
                                 <button 
-                                  onClick={() => handleClockOut(r)}
-                                  className="p-1.5 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
-                                  title="Finish Duty at Current Time"
+                                  onClick={() => {
+                                    if (!checkIsWithinSchedule(r)) {
+                                      showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                                      return;
+                                    }
+                                    if (!r.startTime) handleStartSession(r);
+                                    else handleClockOut(r);
+                                  }}
+                                  className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                                    r.creditHours >= 20 
+                                      ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                      : !checkIsWithinSchedule(r)
+                                        ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                        : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                  }`}
+                                  disabled={r.creditHours >= 20}
+                                  title={
+                                    r.creditHours >= 20 
+                                      ? "Completed" 
+                                      : !checkIsWithinSchedule(r) 
+                                        ? "Outside assigned schedule" 
+                                        : (!r.startTime ? "Start Session" : "Stop Session")
+                                  }
                                 >
                                   <Clock className="w-3.5 h-3.5" />
-                                  <span className="text-[10px] font-bold uppercase">Finish</span>
+                                  <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}</span>
                                 </button>
                               )}
                               <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
                               <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
-                            <button onClick={() => handleVerify(r.id, r.status)} className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${r.status === 'pending' ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'}`}>
-                               {r.status === 'pending' ? 'Approve' : 'Unapprove'}
+                            <button 
+                              onClick={() => handleVerify(r.id, r.status)} 
+                              disabled={r.status === 'active'}
+                              className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${
+                                r.status === 'active' 
+                                  ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                  : r.status === 'pending' 
+                                    ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' 
+                                    : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'
+                              }`}
+                            >
+                               {r.status === 'verified' ? 'Unapprove' : 'Approve'}
                             </button>
                           </div>
                         </td>

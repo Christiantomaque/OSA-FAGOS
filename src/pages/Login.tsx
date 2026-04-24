@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, auth, db } from '../lib/supabase';
-import { Loader2 } from 'lucide-react';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, auth, db, signInWithGoogle, sendPasswordResetEmail } from '../lib/supabase';
+import { Loader2, Mail, Lock, LogIn, Chrome } from 'lucide-react';
 
 export default function Login() {
   const [authEmail, setAuthEmail] = useState('');
@@ -43,7 +43,11 @@ export default function Login() {
                lastLogin: serverTimestamp()
              }, { merge: true });
           }
-          if (role === 'developer' || role === 'admin') navigate('/admin');
+          
+          if (role === 'developer') navigate('/developer');
+          else if (role === 'admin') navigate('/admin');
+          else if (role === 'staff') navigate('/staff');
+          else if (role === 'student_assistant') navigate('/student-assistant');
           else navigate('/staff');
         } catch (e) {
            console.error("Auth routing error", e);
@@ -57,6 +61,34 @@ export default function Login() {
   }, [navigate]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setAuthError('');
+      await signInWithGoogle();
+    } catch (error: any) {
+      setAuthError(error.message);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!authEmail) {
+      setAuthError("Please enter your email address first to reset your password.");
+      return;
+    }
+    setIsSubmitting(true);
+    setAuthError('');
+    try {
+      await sendPasswordResetEmail(auth, authEmail);
+      setResetSent(true);
+      setAuthError("Password reset link sent! Please check your email.");
+    } catch (error: any) {
+      setAuthError(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,40 +134,76 @@ export default function Login() {
         
         <form onSubmit={handleAuth} className="space-y-4">
           {authError && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded text-left">
+            <div className={`p-3 border text-xs rounded text-left ${resetSent ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
               {authError}
             </div>
           )}
           <div className="space-y-1 text-left">
-            <label className="text-xs font-semibold uppercase tracking-wide text-[#a1a1a1]">Email Address</label>
-            <input 
-              type="email" 
-              value={authEmail}
-              onChange={(e) => setAuthEmail(e.target.value)}
-              required
-              className="w-full text-sm placeholder:text-[#a1a1a1]/40 bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] focus:border-[#3ecf8e] outline-none transition-all" 
-              placeholder="user@example.com" 
-            />
+            <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1] ml-1">Email Address</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#444]" />
+              <input 
+                type="email" 
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                required
+                className="w-full text-sm placeholder:text-[#444] bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] pl-10 pr-3 py-2.5 rounded-lg focus:border-[#3ecf8e] focus:ring-1 focus:ring-[#3ecf8e]/20 outline-none transition-all" 
+                placeholder="university@example.edu" 
+              />
+            </div>
           </div>
           <div className="space-y-1 text-left">
-            <label className="text-xs font-semibold uppercase tracking-wide text-[#a1a1a1]">Password</label>
-            <input 
-              type="password" 
-              value={authPassword}
-              onChange={(e) => setAuthPassword(e.target.value)}
-              required
-              className="w-full text-sm placeholder:text-[#a1a1a1]/40 bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] px-3 py-2.5 rounded-md focus:ring-1 focus:ring-[#3ecf8e] focus:border-[#3ecf8e] outline-none transition-all" 
-              placeholder="••••••••" 
-            />
+            <div className="flex justify-between items-end ml-1">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Password</label>
+              {!isRegistering && (
+                <button 
+                  type="button" 
+                  onClick={handleForgotPassword}
+                  className="text-[10px] font-bold text-[#3ecf8e] hover:underline"
+                >
+                  Forgot?
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#444]" />
+              <input 
+                type="password" 
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                required
+                className="w-full text-sm placeholder:text-[#444] bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] pl-10 pr-3 py-2.5 rounded-lg focus:border-[#3ecf8e] focus:ring-1 focus:ring-[#3ecf8e]/20 outline-none transition-all" 
+                placeholder="••••••••" 
+              />
+            </div>
           </div>
           <button 
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-50 text-black font-bold py-2.5 rounded-md transition-colors mt-2 flex justify-center items-center gap-2"
+            className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-50 text-black font-black uppercase tracking-widest text-xs py-3 rounded-lg transition-all shadow-[0_0_15px_rgba(62,207,142,0.15)] mt-4 flex justify-center items-center gap-2"
           >
-            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isRegistering ? 'Sign Up' : 'Sign In'}
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+            {isRegistering ? 'Create Account' : 'Sign In'}
           </button>
+
+          {!isRegistering && (
+            <>
+              <div className="flex items-center gap-4 my-6">
+                <div className="flex-1 h-px bg-[#2e2e2e]" />
+                <span className="text-[10px] font-bold text-[#444] uppercase tracking-widest">or</span>
+                <div className="flex-1 h-px bg-[#2e2e2e]" />
+              </div>
+
+              <button 
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full bg-[#262626] border border-[#2e2e2e] hover:bg-[#2e2e2e] text-[#ededed] font-bold py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 text-sm"
+              >
+                <Chrome className="w-4 h-4" />
+                Google Account
+              </button>
+            </>
+          )}
         </form>
 
         {allowSignups && (

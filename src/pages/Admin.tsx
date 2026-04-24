@@ -1232,6 +1232,8 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       <tr>
                         <th className="px-3 py-2">Beneficiary</th>
                         <th className="px-3 py-2">Program/Sec</th>
+                        <th className="px-3 py-2">Task Title</th>
+                        <th className="px-3 py-2">Time Window</th>
                         <th className="px-3 py-2 text-center">Hrs</th>
                         <th className="px-3 py-2 text-center">Status</th>
                         <th className="px-3 py-2 text-right">Action</th>
