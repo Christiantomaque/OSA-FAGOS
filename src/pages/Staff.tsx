@@ -70,7 +70,13 @@ export default function Staff() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [members, setMembers] = useState<AdminMember[]>([]);
-  const [tab, setTab] = useState<'tasks' | 'records' | 'members' | 'history' | 'settings'>('tasks');
+  const [tab, setTab] = useState<'tasks' | 'records' | 'members' | 'history' | 'settings'>(() => {
+    return (localStorage.getItem('staff_active_tab') as any) || 'tasks';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('staff_active_tab', tab);
+  }, [tab]);
   const [submittingTask, setSubmittingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskSearch, setTaskSearch] = useState('');

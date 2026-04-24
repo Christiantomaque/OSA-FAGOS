@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, auth, db, signInWithGoogle, sendPasswordResetEmail } from '../lib/supabase';
-import { Loader2, Mail, Lock, LogIn, Chrome } from 'lucide-react';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, auth, db, signInWithGoogle, signInWithMicrosoft, sendPasswordResetEmail } from '../lib/supabase';
+import { Loader2, Mail, Lock, LogIn, Chrome, Monitor } from 'lucide-react';
 
 export default function Login() {
   const [authEmail, setAuthEmail] = useState('');
@@ -67,6 +67,15 @@ export default function Login() {
     try {
       setAuthError('');
       await signInWithGoogle();
+    } catch (error: any) {
+      setAuthError(error.message);
+    }
+  };
+
+  const handleMicrosoftSignIn = async () => {
+    try {
+      setAuthError('');
+      await signInWithMicrosoft();
     } catch (error: any) {
       setAuthError(error.message);
     }
@@ -201,6 +210,15 @@ export default function Login() {
               >
                 <Chrome className="w-4 h-4" />
                 Google Account
+              </button>
+
+              <button 
+                type="button"
+                onClick={handleMicrosoftSignIn}
+                className="w-full bg-[#262626] border border-[#2e2e2e] hover:bg-[#2e2e2e] text-[#ededed] font-bold py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 text-sm mt-3"
+              >
+                <Monitor className="w-4 h-4" />
+                Microsoft Account
               </button>
             </>
           )}

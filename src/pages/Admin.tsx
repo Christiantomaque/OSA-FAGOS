@@ -90,7 +90,13 @@ export default function Admin() {
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [members, setMembers] = useState<AdminMember[]>([]);
   const [approvals, setApprovals] = useState<CompletionApproval[]>([]);
-  const [tab, setTab] = useState<'tasks' | 'records' | 'progress' | 'members' | 'history' | 'settings'>('tasks');
+  const [tab, setTab] = useState<'tasks' | 'records' | 'progress' | 'members' | 'history' | 'settings'>(() => {
+    return (localStorage.getItem('admin_active_tab') as any) || 'tasks';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('admin_active_tab', tab);
+  }, [tab]);
   const [submittingTask, setSubmittingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskSearch, setTaskSearch] = useState('');

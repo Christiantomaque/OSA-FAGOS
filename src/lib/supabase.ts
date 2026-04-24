@@ -44,6 +44,17 @@ export const signInWithGoogle = async () => {
     return data;
 };
 
+export const signInWithMicrosoft = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+            redirectTo: window.location.origin + '/portal'
+        }
+    });
+    if (error) throw error;
+    return data;
+};
+
 export const sendPasswordResetEmail = async (authObj: any, email: string) => {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/login'
