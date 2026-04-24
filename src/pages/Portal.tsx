@@ -8,9 +8,9 @@ import SignatureCanvas from 'react-signature-canvas';
 import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
-// --- Image Placeholders ---
-import cdmLogo from '../logo/images/cdmlogo.png';
-import osaLogo from '../logo/images/osalogo.png';
+// --- Image Placeholders (Replace with local imports once files are uploaded) ---
+const cdmLogo = '../logo/images/cdmlogo.png';
+const osaLogo = '../logo/images/osalogo.png';
 
 // --- Types ---
 type Task = {
@@ -364,7 +364,7 @@ export default function Portal() {
                                         {isFull ? (
                                           <span className="text-[9px] text-red-500 font-black uppercase tracking-tighter">Full Capacity</span>
                                         ) : (
-                                          <span className="text-[9px] text-[#3ecf8e] font-bold uppercase tracking-tighter">{remaining}  slot{remaining > 1 ? 's' : ''}  left</span>
+                                          <span className="text-[9px] text-[#3ecf8e] font-bold uppercase tracking-tighter">{remaining}   slot {remaining > 1 ? 's' : ''}  left</span>
                                         )}
                                       </div>
                                       <span className="text-[10px] bg-[#1c1c1c] px-2 py-0.5 rounded text-[#a1a1a1]">{formatDate(t.date)}</span>

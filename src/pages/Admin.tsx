@@ -475,12 +475,10 @@ export default function Admin() {
   const handleStartSession = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      // Keep the HH:MM format for the 'timeIn' text column
-      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       
       await updateDoc(doc(db, 'service_records', record.id), {
-        startTime: now.toISOString(), // Passes a full valid timestamp string for timestamptz
-        timeIn: timeString,           // Passes "HH:MM" for your text column
+        startTime: now.toISOString(),
+        timeIn: now.toISOString(),
         status: 'active',
         updatedAt: serverTimestamp()
       });
@@ -495,33 +493,25 @@ export default function Admin() {
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      // Use new Date(record.timeIn) to parse ISO string correctly
+      const startTime = new Date(record.timeIn);
+      const startH = startTime.getHours();
+      const startM = startTime.getMinutes();
       
-      const [startH, startM] = record.timeIn.split(':').map(Number);
-      const [endH, endM] = currentTime.split(':').map(Number);
+      const endH = now.getHours();
+      const endM = now.getMinutes();
       
-      let durationHours = 0;
-      if (!isNaN(startH) && !isNaN(endH)) {
-        durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
-        if (durationHours < 0) durationHours += 24;
-      }
+      let durationHours = (endH + endM / 60) - (startH + startM / 60);
+      if (durationHours < 0) durationHours += 24;
 
       // Late Penalty Logic
-      // If student started late relative to scheduled start, they get their actual duration.
-      // If we want to penalize them further or cap the end time:
       if (record.scheduledEndTime) {
         const [schEndH, schEndM] = record.scheduledEndTime.split(':').map(Number);
         const schEndTotal = schEndH * 60 + schEndM;
-        const actualEndTotal = now.getHours() * 60 + now.getMinutes();
+        const actualEndTotal = endH * 60 + endM;
         
-        // If they stayed past the scheduled end time, we only credit them up to the scheduled end
         if (actualEndTotal > schEndTotal) {
-           const [schStartH, schStartM] = record.scheduledStartTime?.split(':').map(Number) || [startH, startM];
-           // Actual work duration capped by scheduled end
-           const creditEndH = schEndH;
-           const creditEndM = schEndM;
-           
-           durationHours = (creditEndH + creditEndM / 60) - (startH + startM / 60);
+           durationHours = (schEndH + schEndM / 60) - (startH + startM / 60);
            if (durationHours < 0) durationHours += 24;
         }
       }
@@ -529,7 +519,7 @@ export default function Admin() {
       const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
       
       await updateDoc(doc(db, 'service_records', record.id), {
-        timeOut: currentTime,
+        timeOut: now.toISOString(),
         creditHours: creditHours,
         status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
@@ -537,7 +527,7 @@ export default function Admin() {
       // Result handled by onSnapshot
       showAlert("Success", "Student clocked out successfully.", "success");
     } catch (e: any) {
-      console.error("FULL ERROR OBJECT:", e);
+      console.error(e);
       showAlert("Error", `Failed to clock out student: ${e.message || "Unknown error"}`, "error");
     }
   };
@@ -545,25 +535,37 @@ export default function Admin() {
   const onRecordSubmit = async (data: ServiceRecord) => {
     try {
       const { id, ...payload } = data;
-      
-      // Calculate duration
-      const [startH, startM] = data.timeIn.split(':').map(Number);
-      const [endH, endM] = data.timeOut.split(':').map(Number);
-      
-      let durationHours = 0;
-      if (!isNaN(startH) && !isNaN(endH)) {
-        durationHours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
-        if (durationHours < 0) durationHours += 24;
+
+      // If they are just "HH:MM", we need to prepend the date
+      let startDateTime: Date;
+      let endDateTime: Date;
+
+      if (data.timeIn.includes(':') && !data.timeIn.includes('T')) {
+          startDateTime = new Date(`${data.date}T${data.timeIn}:00Z`);
+      } else {
+          startDateTime = new Date(data.timeIn);
       }
+
+      if (data.timeOut.includes(':') && !data.timeOut.includes('T')) {
+          endDateTime = new Date(`${data.date}T${data.timeOut}:00Z`);
+      } else {
+          endDateTime = new Date(data.timeOut);
+      }
+
+      payload.timeIn = startDateTime.toISOString();
+      payload.timeOut = endDateTime.toISOString();
+
+      // Calculate duration
+      let durationHours = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
       
       // Cap at 20 hours as requested
       payload.creditHours = Math.min(20, Number(durationHours.toFixed(1)));
-      
+
       await updateDoc(doc(db, 'service_records', id), payload as any);
       setEditingRecord(null);
       // Result handled by onSnapshot
       showAlert("Success", "Service log updated successfully.", "success");
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       showAlert("Error", "Failed to update service log.", "error");
     }
