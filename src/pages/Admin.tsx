@@ -1,107 +1,88 @@
 import { useState, useEffect, useRef } from 'react';
 
-const LiveClock = ({ 
-  startTime, 
-  accumulatedSeconds = 0, 
-  scheduledEndTime, 
-  scheduledStartTime,
-  taskDuration 
-}: { 
-  startTime?: string, 
-  accumulatedSeconds?: number, 
-  scheduledEndTime?: string, 
-  scheduledStartTime?: string,
-  taskDuration?: number 
-}) => {
+const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime }: { startTime?: string, accumulatedSeconds?: number, scheduledEndTime?: string }) => {
   const [totalSeconds, setTotalSeconds] = useState(accumulatedSeconds);
   const [isAutoStopped, setIsAutoStopped] = useState(false);
-  const [nowValue, setNowValue] = useState(Date.now());
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNowValue(Date.now());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (!startTime) {
       setTotalSeconds(accumulatedSeconds);
-      setIsAutoStopped(false);
       return;
     }
 
     const start = new Date(startTime).getTime();
-    let currentDelta = Math.floor((nowValue - start) / 1000);
+    let endTarget = Infinity;
 
+    // 1. Establish the strict cutoff line
     if (scheduledEndTime) {
        const end = new Date(scheduledEndTime).getTime();
-       let endTarget = end;
+       endTarget = end;
+       // Handle midnight rollover safely
        if (endTarget <= start) {
-         endTarget += 24 * 3600 * 1000;
-       }
-       if (nowValue >= endTarget) {
-         currentDelta = Math.floor((endTarget - start) / 1000);
-         setIsAutoStopped(true);
-       } else {
-         setIsAutoStopped(false);
+          const d = new Date(endTarget);
+          d.setDate(d.getDate() + 1);
+          endTarget = d.getTime();
        }
     }
-    setTotalSeconds(Math.max(0, accumulatedSeconds + currentDelta));
-  }, [startTime, accumulatedSeconds, scheduledEndTime, nowValue]);
+
+    // 2. The core update logic
+    const updateClock = () => {
+      const now = Date.now();
+      
+      if (now >= endTarget) {
+        // KILL SWITCH: Time is up. Calculate exact diff to the end target, freeze it, and turn red.
+        const delta = Math.floor((endTarget - start) / 1000);
+        setTotalSeconds(accumulatedSeconds + delta);
+        setIsAutoStopped(true);
+        return true; // Signals the interval to stop
+      } else {
+        // NORMAL TICK: Just add the seconds passed
+        setTotalSeconds(accumulatedSeconds + Math.floor((now - start) / 1000));
+        return false; // Signals interval to keep going
+      }
+    };
+
+    // Run once immediately on mount
+    if (updateClock()) return;
+
+    // Run every second
+    const interval = setInterval(() => {
+      if (updateClock()) clearInterval(interval);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startTime, accumulatedSeconds, scheduledEndTime]);
+
+  // 3. The Dynamic Formatter you missed
+  const formatDynamicTime = (secs: number) => {
+    if (secs < 60) return `${secs} SEC${secs !== 1 ? 'S' : ''}`;
+    if (secs < 3600) {
+      const mins = Math.floor(secs / 60);
+      return `${mins} MIN${mins !== 1 ? 'S' : ''}`;
+    }
+    const hrs = Number((secs / 3600).toFixed(1));
+    return `${hrs} HR${hrs !== 1 ? 'S' : ''}`;
+  };
 
   const hrs = Math.floor(totalSeconds / 3600);
   const mins = Math.floor((totalSeconds % 3600) / 60);
   const secs = totalSeconds % 60;
   
-  const calculatedCreditHoursText = formatDynamicTimeDisplay(totalSeconds);
-
-  let remainingWarning = null;
-  if (scheduledStartTime && scheduledEndTime && startTime) {
-     const schedStartObj = new Date(scheduledStartTime).getTime();
-     const schedEndObj = new Date(scheduledEndTime).getTime();
-     const actualStartObj = new Date(startTime).getTime();
-     
-     let endTarget = schedEndObj;
-     if (endTarget <= schedStartObj) endTarget += 24 * 3600 * 1000;
-
-     const originalDurationHours = taskDuration || (endTarget - schedStartObj) / 3600000;
-     
-     // Only warn if they started late (more than 1 min past start time)
-     if (!isAutoStopped && actualStartObj > schedStartObj + 60000) {
-        const remainingSecondsToTarget = Math.floor((endTarget - nowValue) / 1000);
-        if (remainingSecondsToTarget > 0) {
-           const maxPossibleHours = ((accumulatedSeconds + Math.floor((endTarget - actualStartObj)/1000)) / 3600).toFixed(1);
-           const expectedHours = originalDurationHours.toFixed(1);
-           
-           if (Number(maxPossibleHours) < Number(expectedHours)) {
-              const remHrs = Math.floor(remainingSecondsToTarget / 3600);
-              const remMins = Math.floor((remainingSecondsToTarget % 3600) / 60);
-              const remSecs = remainingSecondsToTarget % 60;
-              remainingWarning = (
-                <div className="text-[9px] text-amber-500 flex flex-col items-center leading-tight mt-1.5 border border-amber-500/20 bg-amber-500/10 px-2 py-1 rounded">
-                   <span className="font-bold">Late Start Detected</span>
-                   <span>Max creditable: {maxPossibleHours} {maxPossibleHours === '1.0' ? 'hr' : 'hrs'}</span>
-                   <span className="font-mono text-[8px] mt-0.5 text-amber-400">Time left: {remHrs.toString().padStart(2, '0')}:{remMins.toString().padStart(2, '0')}:{remSecs.toString().padStart(2, '0')}</span>
-                </div>
-              );
-           }
-        }
-     }
-  }
-
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-end gap-1.5">
-        <span className={`font-mono text-lg tracking-tighter ${isAutoStopped ? 'text-red-400' : 'text-[#3ecf8e]'}`}>
+      <div className="flex items-center gap-2">
+        <span className={`font-mono text-lg font-black tracking-tighter ${isAutoStopped ? 'text-red-500' : 'text-[#3ecf8e]'}`}>
           {hrs.toString().padStart(2, '0')}:{mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}
         </span>
+        <span className="text-[10px] font-bold text-[#a1a1a1] uppercase bg-[#262626] px-1.5 py-0.5 rounded border border-[#2e2e2e]">
+          {formatDynamicTime(totalSeconds)}
+        </span>
       </div>
-      <div className="text-[10px] text-[#a1a1a1] mt-0.5">
-        Credit: <span className="text-[#ededed] font-bold">{calculatedCreditHoursText}</span>
-      </div>
-      {isAutoStopped && <span className="text-[8px] font-bold text-red-500 uppercase tracking-widest mt-1">Auto-Stopped</span>}
-      {remainingWarning}
+      {isAutoStopped && (
+        <span className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 bg-red-500/10 px-2 py-0.5 rounded">
+          Auto-Stopped
+        </span>
+      )}
     </div>
   );
 };
@@ -1492,7 +1473,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                         </td>
                         <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">
                           {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
-                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} scheduledStartTime={r.scheduledStartTime || tasks.find(t => t.id === r.taskId)?.startTime} taskDuration={tasks.find(t => t.id === r.taskId)?.duration} />
+                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} />
                           ) : (
                             formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
                           )}
@@ -1607,7 +1588,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                         <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
                         <div className="font-bold text-[#3ecf8e] text-xl">
                           {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
-                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} scheduledStartTime={r.scheduledStartTime || tasks.find(t => t.id === r.taskId)?.startTime} taskDuration={tasks.find(t => t.id === r.taskId)?.duration} />
+                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} />
                           ) : (
                             formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
                           )}
