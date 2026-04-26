@@ -767,7 +767,7 @@ export default function Staff() {
                           <Users className="w-2.5 h-2.5" />
                           <span>{records.filter(r => r.taskId === t.id && r.status === 'verified').length} / {t.capacity || 1}</span>
                         </div>
-                        <div className="text-xl font-bold text-[#3ecf8e]">{t.duration} hrs</div>
+                        <div className="text-xl font-bold text-[#3ecf8e]">{t.duration} {Number(t.duration) === 1 ? 'hr' : 'hrs'}</div>
                       </div>
                     </div>
                   </div>
