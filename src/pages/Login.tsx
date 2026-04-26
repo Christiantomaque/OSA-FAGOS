@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, auth, db, signInWithGoogle, signInWithMicrosoft, sendPasswordResetEmail } from '../lib/supabase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  doc, 
+  getDoc, 
+  db, 
+  signInWithGoogle, 
+  signInWithMicrosoft, 
+  sendPasswordResetEmail,
+  auth 
+} from '../lib/supabase';
 import { Loader2, Mail, Lock, LogIn, Chrome, Monitor, Home } from 'lucide-react';
 
 export default function Login() {
@@ -10,10 +20,13 @@ export default function Login() {
   const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(true);
   const [allowSignups, setAllowSignups] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check global settings for signups
+    // We only need to check global settings now. 
+    // Navigation is handled globally by App.tsx/AuthGuard.
     const fetchSettings = async () => {
       try {
         const snap = await getDoc(doc(db, 'settings', 'global'));
@@ -22,50 +35,17 @@ export default function Login() {
         }
       } catch (e) {
         console.error("Failed to fetch settings:", e);
+      } finally {
+        setLoading(false);
       }
     };
     fetchSettings();
-
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        try {
-          const userDoc = await getDoc(doc(db, 'admins', u.uid));
-          let role = 'staff';
-          if (userDoc.exists() && userDoc.data().role) {
-            role = userDoc.data().role;
-          } else {
-             // For first user or legacy fallback
-             role = u.email === 'christiantomaque18@gmail.com' ? 'developer' : 'student_assistant';
-             await setDoc(doc(db, 'admins', u.uid), {
-               email: u.email,
-               displayName: u.displayName || 'New User',
-               role: role,
-               lastLogin: serverTimestamp()
-             }, { merge: true });
-          }
-          
-          if (role === 'developer') navigate('/developer');
-          else if (role === 'admin') navigate('/admin');
-          else if (role === 'staff') navigate('/staff');
-          else if (role === 'student_assistant') navigate('/student-assistant');
-          else navigate('/staff');
-        } catch (e) {
-           console.error("Auth routing error", e);
-           navigate('/staff'); // default fallback
-        }
-      } else {
-        setLoading(false);
-      }
-    });
-    return () => unsub();
-  }, [navigate]);
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
+  }, []);
 
   const handleGoogleSignIn = async () => {
     try {
       setAuthError('');
+      // This now triggers the PKCE flow we configured in supabase.ts
       await signInWithGoogle();
     } catch (error: any) {
       setAuthError(error.message);
@@ -104,44 +84,35 @@ export default function Login() {
     setAuthError('');
     setIsSubmitting(true);
     try {
-      if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes("xxxx")) {
-         throw new Error("Supabase is not configured! Please open 'Settings' -> 'Environment Variables' and add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from your Supabase dashboard.");
-      }
-
       if (isRegistering) {
-        if (!allowSignups) throw new Error("Signups are currently disabled by the administrator.");
+        if (!allowSignups) throw new Error("Signups are currently disabled.");
         const res = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
         if (res && res.user && !res.session) {
-            setAuthError("Sign up successful! Please check your email to verify your account before logging in.");
+            setAuthError("Sign up successful! Check your email to verify your account.");
         }
       } else {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
+        // No navigate() here! AuthGuard in App.tsx will handle the redirect.
       }
     } catch (error: any) {
-      console.error("Auth Error:", error);
-      let msg = error.message;
-      if (msg.includes("Email not confirmed") || msg.toLowerCase().includes("verify your email")) {
-         msg = "Please check your inbox to verify your email address, or disable 'Confirm email' in your Supabase Auth Providers settings.";
-      } else if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
-         msg = "Network connection failed. Make sure your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are correctly set in the environment variables, and that they match your Supabase project.";
-      }
-      setAuthError(msg);
+      setAuthError(error.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loading) return <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center"><Loader2 className="animate-spin text-[#3ecf8e]" /></div>;
+  if (loading) return (
+    <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center">
+      <Loader2 className="animate-spin text-[#3ecf8e]" />
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#1c1c1c] flex flex-col items-center justify-center p-6 text-[#ededed]">
-      
-      {/* Added relative positioning to the card to constrain the absolute Home button */}
       <div className="relative bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-8 rounded-2xl text-center shadow-xl">
         
-        {/* NEW: Back to Portal Button top-right corner of the card */}
         <button 
-          onClick={() => navigate('/portal')}
+          onClick={() => navigate('/')}
           className="absolute top-5 right-5 p-2 bg-[#1c1c1c] border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed] hover:border-[#444] rounded-lg transition-all"
           title="Back to Portal"
         >
@@ -168,7 +139,7 @@ export default function Login() {
                 value={authEmail}
                 onChange={(e) => setAuthEmail(e.target.value)}
                 required
-                className="w-full text-sm placeholder:text-[#444] bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] pl-10 pr-3 py-2.5 rounded-lg focus:border-[#3ecf8e] focus:ring-1 focus:ring-[#3ecf8e]/20 outline-none transition-all" 
+                className="w-full text-sm placeholder:text-[#444] bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] pl-10 pr-3 py-2.5 rounded-lg focus:border-[#3ecf8e] outline-none" 
                 placeholder="university@example.edu" 
               />
             </div>
@@ -177,13 +148,7 @@ export default function Login() {
             <div className="flex justify-between items-end ml-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1]">Password</label>
               {!isRegistering && (
-                <button 
-                  type="button" 
-                  onClick={handleForgotPassword}
-                  className="text-[10px] font-bold text-[#3ecf8e] hover:underline"
-                >
-                  Forgot?
-                </button>
+                <button type="button" onClick={handleForgotPassword} className="text-[10px] font-bold text-[#3ecf8e] hover:underline">Forgot?</button>
               )}
             </div>
             <div className="relative">
@@ -193,7 +158,7 @@ export default function Login() {
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
                 required
-                className="w-full text-sm placeholder:text-[#444] bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] pl-10 pr-3 py-2.5 rounded-lg focus:border-[#3ecf8e] focus:ring-1 focus:ring-[#3ecf8e]/20 outline-none transition-all" 
+                className="w-full text-sm placeholder:text-[#444] bg-[#1c1c1c] border border-[#2e2e2e] text-[#ededed] pl-10 pr-3 py-2.5 rounded-lg focus:border-[#3ecf8e] outline-none" 
                 placeholder="••••••••" 
               />
             </div>
@@ -201,7 +166,7 @@ export default function Login() {
           <button 
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-50 text-black font-black uppercase tracking-widest text-xs py-3 rounded-lg transition-all shadow-[0_0_15px_rgba(62,207,142,0.15)] mt-4 flex justify-center items-center gap-2"
+            className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-50 text-black font-black uppercase tracking-widest text-xs py-3 rounded-lg transition-all mt-4 flex justify-center items-center gap-2"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
             {isRegistering ? 'Create Account' : 'Sign In'}
@@ -245,11 +210,6 @@ export default function Login() {
             >
               {isRegistering ? 'Sign In' : 'Sign Up'}
             </button>
-          </div>
-        )}
-        {!allowSignups && !isRegistering && (
-          <div className="mt-6 text-xs text-[#a1a1a1] italic">
-            New account signups are currently disabled by the administrator.
           </div>
         )}
       </div>
