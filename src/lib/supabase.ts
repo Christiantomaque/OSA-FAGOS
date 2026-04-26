@@ -37,7 +37,11 @@ export const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.origin + '/portal'
+            // This ensures a clean URL like: localhost:3000/?code=...
+            // instead of the giant #access_token=...
+            redirectTo: window.location.origin + '/portal',
+            // @ts-ignore - only use this if the error persists after updating
+            flowType: 'pkce' 
         }
     });
     if (error) throw error;
