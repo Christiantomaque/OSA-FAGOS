@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 
-const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime }: { startTime?: string, accumulatedSeconds?: number, scheduledEndTime?: string }) => {
+const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime, onTimeUp }: { startTime?: string, accumulatedSeconds?: number, scheduledEndTime?: string, onTimeUp?: () => void }) => {
   const [totalSeconds, setTotalSeconds] = useState(accumulatedSeconds);
   const [isAutoStopped, setIsAutoStopped] = useState(false);
+  const hasFired = useRef(false);
 
   useEffect(() => {
     if (!startTime) {
@@ -13,11 +14,9 @@ const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime }: { st
     const start = new Date(startTime).getTime();
     let endTarget = Infinity;
 
-    // 1. Establish the strict cutoff line
     if (scheduledEndTime) {
        const end = new Date(scheduledEndTime).getTime();
        endTarget = end;
-       // Handle midnight rollover safely
        if (endTarget <= start) {
           const d = new Date(endTarget);
           d.setDate(d.getDate() + 1);
@@ -25,35 +24,35 @@ const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime }: { st
        }
     }
 
-    // 2. The core update logic
     const updateClock = () => {
       const now = Date.now();
       
       if (now >= endTarget) {
-        // KILL SWITCH: Time is up. Calculate exact diff to the end target, freeze it, and turn red.
         const delta = Math.floor((endTarget - start) / 1000);
         setTotalSeconds(accumulatedSeconds + delta);
-        setIsAutoStopped(true);
-        return true; // Signals the interval to stop
+        
+        if (!isAutoStopped) {
+           setIsAutoStopped(true);
+           if (onTimeUp && !hasFired.current) {
+               hasFired.current = true;
+               onTimeUp(); 
+           }
+        }
+        return true; 
       } else {
-        // NORMAL TICK: Just add the seconds passed
         setTotalSeconds(accumulatedSeconds + Math.floor((now - start) / 1000));
-        return false; // Signals interval to keep going
+        return false; 
       }
     };
 
-    // Run once immediately on mount
     if (updateClock()) return;
-
-    // Run every second
     const interval = setInterval(() => {
       if (updateClock()) clearInterval(interval);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [startTime, accumulatedSeconds, scheduledEndTime]);
+  }, [startTime, accumulatedSeconds, scheduledEndTime, isAutoStopped, onTimeUp]);
 
-  // 3. The Dynamic Formatter you missed
   const formatDynamicTime = (secs: number) => {
     if (secs < 60) return `${secs} SEC${secs !== 1 ? 'S' : ''}`;
     if (secs < 3600) {
@@ -685,6 +684,34 @@ export default function Admin() {
     }
   };
 
+  const handleAutoComplete = async (record: ServiceRecord) => {
+    // Only act if the record is currently running
+    if (record.status !== 'active') return; 
+
+    try {
+      const endObj = new Date(record.scheduledEndTime || tasks.find(t => t.title === record.taskTitle && t.date === record.date)?.endTime || Date.now());
+      const startObj = new Date(record.timeIn || record.startTime || Date.now());
+      
+      let durationHours = (endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60);
+      if (durationHours < 0) durationHours = 0;
+      const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
+
+      // "Clock them out" but wait for Admin verification
+      await updateDoc(doc(db, 'service_records', record.id), {
+        timeOut: endObj.toISOString(),
+        creditHours: creditHours,
+        accumulated_seconds: Math.floor((endObj.getTime() - startObj.getTime()) / 1000),
+        startTime: null,
+        status: 'pending', // <--- CRITICAL: Must be 'pending' so the Admin can manually click Approve
+        updatedAt: serverTimestamp()
+      });
+      
+      showAlert("Time Up", `${record.studentName}'s session has automatically ended. Awaiting your approval.`, "success");
+    } catch (e: any) {
+      console.error("Auto-complete failed: ", e);
+    }
+  };
+
   const onRecordSubmit = async (data: ServiceRecord) => {
     try {
       const { id, ...payload } = data;
@@ -919,13 +946,12 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     if (!startObj || !endObj) return true;
 
     const now = new Date();
-    // Allow starting 15 minutes before
     if (endObj.getTime() <= startObj.getTime()) {
       endObj.setDate(endObj.getDate() + 1);
     }
-    const startWindow = new Date(startObj.getTime() - 15 * 60000);
-
-    return now.getTime() >= startWindow.getTime() && now.getTime() <= endObj.getTime();
+    
+    // FIX: Removed the 15-minute early buffer. Must be exact time.
+    return now.getTime() >= startObj.getTime() && now.getTime() <= endObj.getTime();
   };
 
   const studentProgressRaw = Object.values(
@@ -1473,7 +1499,12 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                         </td>
                         <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">
                           {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
-                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} />
+                            <LiveClock 
+                              startTime={r.startTime} 
+                              accumulatedSeconds={r.accumulated_seconds || 0} 
+                              scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.title === r.taskTitle && t.date === r.date)?.endTime}
+                              onTimeUp={() => handleAutoComplete(r)} 
+                            />
                           ) : (
                             formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
                           )}
@@ -1588,7 +1619,12 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                         <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
                         <div className="font-bold text-[#3ecf8e] text-xl">
                           {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
-                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} />
+                            <LiveClock 
+                              startTime={r.startTime} 
+                              accumulatedSeconds={r.accumulated_seconds || 0} 
+                              scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.title === r.taskTitle && t.date === r.date)?.endTime}
+                              onTimeUp={() => handleAutoComplete(r)} 
+                            />
                           ) : (
                             formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
                           )}

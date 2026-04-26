@@ -425,13 +425,12 @@ export default function Staff() {
     if (!startObj || !endObj) return true;
 
     const now = new Date();
-    // Allow starting 15 minutes before
     if (endObj.getTime() <= startObj.getTime()) {
       endObj.setDate(endObj.getDate() + 1);
     }
-    const startWindow = new Date(startObj.getTime() - 15 * 60000);
-
-    return now.getTime() >= startWindow.getTime() && now.getTime() <= endObj.getTime();
+    
+    // FIX: Removed the 15-minute early buffer. Must be exact time.
+    return now.getTime() >= startObj.getTime() && now.getTime() <= endObj.getTime();
   };
 
   const handleStartSession = async (record: ServiceRecord) => {
