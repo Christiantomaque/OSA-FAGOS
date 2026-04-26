@@ -24,10 +24,8 @@ export const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            // Redirect to root so App.tsx AuthGuard can catch the session and show OTP gate
             redirectTo: window.location.origin + '/',
-            // PKCE prevents the giant #access_token in the URL and fixes 413 errors
-            // @ts-ignore - Ignore if @supabase/supabase-js version is < 2.21.0
+            // @ts-ignore - Supresses the outdated dictionary error
             flowType: 'pkce' 
         }
     });
