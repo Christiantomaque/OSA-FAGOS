@@ -8,7 +8,7 @@ import StudentAssistant from './pages/StudentAssistant';
 import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
-import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, RefreshCw } from 'lucide-react';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
@@ -27,27 +27,28 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // SAFETY VALVE: If Supabase or the network hangs for more than 5 seconds, 
-    // we force the app to stop loading so the public can see the Portal.
+    // 1. SAFETY VALVE: If Supabase hangs for more than 4 seconds, force-stop the spinner.
     const safetyTimer = setTimeout(() => {
       if (initializing) {
-        console.warn("AuthGuard: Security handshake timed out. Failing open.");
+        console.warn("MFA Gate: Handshake timed out. Failing open to allow Portal access.");
         setInitializing(false);
         if (mfaStatus === 'checking') setMfaStatus('verified');
       }
-    }, 5000);
+    }, 4000);
 
     const unsub = onAuthStateChanged(null, async (u) => {
       try {
         if (u) {
           setUser(u);
+          
+          // 2. Check if the user is already fully verified
           const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           
           if (aalData?.currentLevel === 'aal2') {
             setMfaStatus('verified');
             handleRoleRouting(u);
           } else {
-            // 1. Fetch factors and use type-casting to bypass TS2367 error
+            // 3. List factors to check for "Ghost" (unverified) attempts
             const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
             if (factorsErr) throw factorsErr;
 
@@ -58,13 +59,18 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // 2. Loop-Breaker: Delete unverified factors to prevent 422 errors
+              // 4. AUTO-RECOVERY: Delete any stuck/unverified factor before starting a new one
               if (unverifiedFactor) {
+                console.log("MFA Gate: Cleaning up stuck enrollment...");
                 await supabase.auth.mfa.unenroll({ factorId: unverifiedFactor.id });
               }
 
-              // 3. Start fresh TOTP enrollment
-              const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+              // 5. Start Fresh Enrollment with a Friendly Name
+              const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({ 
+                factorType: 'totp',
+                friendlyName: 'OSA FAGOS Device' // Added this to prevent the "" error
+              });
+              
               if (enrollError) throw enrollError;
               
               setFactorId(enrollData.id);
@@ -74,13 +80,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
-          // Public Access Logic: Stop loading and show public portal
           setUser(null);
           setMfaStatus('verified');
         }
       } catch (err: any) {
-        console.error("Critical Auth Error:", err);
-        setMfaStatus('verified'); 
+        console.error("MFA Critical Error:", err.message);
+        setMfaStatus('verified'); // Don't block the public portal on error
       } finally {
         clearTimeout(safetyTimer);
         setInitializing(false);
@@ -139,23 +144,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       setMfaStatus('verified');
       handleRoleRouting(user);
     } catch (err: any) {
-      setError(err.message || "Invalid code. Please check your app.");
+      setError("Invalid code. Please check your app.");
     } finally {
       setVerifying(false);
     }
   };
 
-  // --- GLOBAL LOADING SCREEN ---
+  // --- LOADING UI ---
   if (initializing || mfaStatus === 'checking') return (
     <div className="flex flex-col gap-4 justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
       <Loader2 className="animate-spin w-10 h-10" />
       <p className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1] animate-pulse">
-        Initializing Security...
+        System Security Initializing...
       </p>
     </div>
   );
 
-  // --- MFA SECURITY GATE ---
+  // --- MFA GATE UI ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-6 text-[#ededed]">
@@ -163,12 +168,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           <div className="w-12 h-12 bg-[#3ecf8e]/10 rounded-xl flex items-center justify-center mx-auto mb-4">
             <ShieldCheck className="w-6 h-6 text-[#3ecf8e]" />
           </div>
-          <h2 className="text-xl font-bold mb-1 tracking-tight">Two-Step Verification</h2>
-          <p className="text-[#a1a1a1] text-xs mb-8 uppercase tracking-widest font-semibold">Secure Access Required</p>
+          <h2 className="text-xl font-bold mb-1 tracking-tight">Authenticator Setup</h2>
+          <p className="text-[#a1a1a1] text-xs mb-8 uppercase tracking-widest">Device Enrollment Required</p>
           
           {mfaStatus === 'setup' && (
-            <div className="space-y-6 mb-8 animate-in fade-in zoom-in duration-300">
-              {/* QR Container - High contrast (Black on White) for scanner reliability */}
+            <div className="space-y-6 mb-8">
+              {/* QR Container - High Contrast for Brave/Chrome scanners */}
               <div className="bg-white p-3 rounded-2xl inline-block shadow-inner mx-auto">
                 <div 
                   className="w-40 h-40 flex items-center justify-center"
@@ -177,12 +182,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               </div>
 
               {/* Manual Entry Section */}
-              <div className="text-left space-y-2">
+              <div className="text-left space-y-2 px-2">
                 <div className="flex items-center gap-2 text-[10px] font-bold text-[#a1a1a1] ml-1 uppercase tracking-widest">
                   <Info className="w-3.5 h-3.5" />
-                  <span>Manual Setup Key</span>
+                  <span>Manual Key</span>
                 </div>
-                <div className="flex items-center justify-between gap-3 bg-[#1c1c1c] border border-[#2e2e2e] p-3 rounded-xl transition-all hover:border-[#3ecf8e]/30">
+                <div className="flex items-center justify-between gap-3 bg-[#1c1c1c] border border-[#2e2e2e] p-3 rounded-xl">
                   <code className="text-sm font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
                   <button onClick={handleCopyKey} className="p-2 hover:bg-[#3ecf8e]/10 rounded-lg transition-all text-[#3ecf8e]">
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -193,30 +198,27 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           )}
           
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <div className="text-left space-y-2">
-              <label className="text-[10px] font-bold text-[#a1a1a1] ml-1 uppercase tracking-widest">Authenticator Code</label>
+            <div className="text-left space-y-2 px-2">
+              <label className="text-[10px] font-bold text-[#a1a1a1] ml-1 uppercase tracking-widest">6-Digit Code</label>
               <input 
-                type="text" 
-                maxLength={6}
-                value={otpInput}
+                type="text" maxLength={6} value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full text-center tracking-[0.5em] font-mono text-2xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3.5 rounded-xl outline-none focus:border-[#3ecf8e] focus:ring-1 focus:ring-[#3ecf8e]/20 transition-all"
+                className="w-full text-center tracking-[0.5em] font-mono text-2xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3.5 rounded-xl outline-none focus:border-[#3ecf8e] transition-all"
               />
             </div>
-            {error && <p className="text-red-500 text-[10px] font-bold uppercase bg-red-500/10 py-2.5 rounded-lg border border-red-500/20">{error}</p>}
+            {error && <p className="text-red-500 text-[10px] font-bold bg-red-500/10 py-2.5 rounded-lg border border-red-500/20">{error}</p>}
             <button 
-              type="submit" 
-              disabled={verifying || otpInput.length < 6}
-              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase tracking-widest text-xs py-4 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-30 active:scale-95 shadow-lg shadow-[#3ecf8e]/5"
+              type="submit" disabled={verifying || otpInput.length < 6}
+              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase tracking-widest text-xs py-4 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-30 active:scale-95"
             >
               {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-              {mfaStatus === 'setup' ? 'Activate Security' : 'Authorize Session'}
+              {mfaStatus === 'setup' ? 'Verify and Activate' : 'Authorize Dashboard'}
             </button>
           </form>
 
-          <button onClick={() => supabase.auth.signOut()} className="mt-8 text-[10px] font-bold text-[#a1a1a1] hover:text-[#3ecf8e] uppercase tracking-widest transition-colors">
-            Cancel and Logout
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="mt-8 flex items-center justify-center gap-2 mx-auto text-[10px] font-bold text-[#666] hover:text-[#ededed] uppercase tracking-widest transition-colors">
+            <RefreshCw className="w-3 h-3" /> Fix Stuck Session
           </button>
         </div>
       </div>

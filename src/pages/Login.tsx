@@ -186,7 +186,7 @@ export default function Login() {
             <>
               <div className="flex items-center gap-4 my-6 opacity-40">
                 <div className="flex-1 h-px bg-[#2e2e2e]" />
-                <span className="text-[10px] font-bold text-[#ededed] uppercase tracking-widest">secure SSO</span>
+                <span className="text-[10px] font-bold text-[#ededed] uppercase tracking-widest">OTHERS</span>
                 <div className="flex-1 h-px bg-[#2e2e2e]" />
               </div>
 
