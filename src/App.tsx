@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-// Notice: sendVerificationCode is removed because we don't need emails anymore!
 import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase } from './lib/supabase';
 import Portal from './pages/Portal';
 import Admin from './pages/Admin';
@@ -9,18 +8,19 @@ import StudentAssistant from './pages/StudentAssistant';
 import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
-import { Loader2, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info } from 'lucide-react';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<any>(null);
   
-  // New MFA States for Authenticator App
   const [mfaStatus, setMfaStatus] = useState<'checking' | 'setup' | 'verify' | 'verified'>('checking');
   const [qrCode, setQrCode] = useState('');
+  const [secretKey, setSecretKey] = useState(''); // Stores the manual entry key
   const [factorId, setFactorId] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   
   const navigate = useNavigate();
@@ -29,31 +29,26 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const unsub = onAuthStateChanged(null, async (u) => {
       if (u) {
         setUser(u);
-        
         try {
-          // 1. Check Authenticator Assurance Level (AAL)
           const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           
           if (aalData?.currentLevel === 'aal2') {
-            // User has completed Two-Step Verification this session
             setMfaStatus('verified');
             handleRoleRouting(u);
           } else {
-            // User is aal1 (Logged in, but MFA not verified yet)
             const { data: factorsData } = await supabase.auth.mfa.listFactors();
             const totpFactor = factorsData?.totp?.[0];
 
             if (totpFactor && totpFactor.status === 'verified') {
-              // They already set up an app before, just ask for the 6-digit code
               setFactorId(totpFactor.id);
               setMfaStatus('verify');
             } else {
-              // First time login! Generate a QR code for them to scan
               const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
               if (enrollError) throw enrollError;
               
               setFactorId(enrollData.id);
-              setQrCode(enrollData.totp.qr_code); // Supabase gives us the raw SVG
+              setQrCode(enrollData.totp.qr_code);
+              setSecretKey(enrollData.totp.secret); // Capture the manual secret key
               setMfaStatus('setup');
             }
           }
@@ -61,8 +56,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           console.error("Auth/MFA Error:", err);
         }
       } else {
-        // FIX: If no user is logged in, stop checking and mark as 'verified' 
-        // so the public can see the Portal without the loader blocking them.
         setUser(null);
         setMfaStatus('verified');
       }
@@ -76,16 +69,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const userDoc = await getDoc(doc(db, 'admins', u.uid));
       let role = userDoc.exists() ? userDoc.data().role : 'staff';
       
-      // Developer override for initial setup
-      if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
-        role = 'developer';
-        await setDoc(doc(db, 'admins', u.uid), {
-          email: u.email,
-          displayName: u.displayName || 'User',
-          role: role,
-          lastLogin: serverTimestamp()
-        }, { merge: true });
-      } else if (!userDoc.exists()) {
+      if (!userDoc.exists()) {
+        role = u.email === 'christiantomaque18@gmail.com' ? 'developer' : 'staff';
         await setDoc(doc(db, 'admins', u.uid), {
           email: u.email,
           displayName: u.displayName || 'User',
@@ -99,13 +84,18 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(secretKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setVerifying(true);
     setError('');
 
     try {
-      // Create a challenge, then verify the code against it
       const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
       if (challengeError) throw challengeError;
 
@@ -117,7 +107,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
       if (verifyError) throw verifyError;
 
-      // Success! They are now AAL2 verified.
       setMfaStatus('verified');
       handleRoleRouting(user);
     } catch (err: any) {
@@ -127,55 +116,81 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // If we are still initializing the auth state, show the loader.
   if (initializing || mfaStatus === 'checking') return (
     <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
       <Loader2 className="animate-spin w-8 h-8" />
     </div>
   );
 
-  // --- THE GATE: Only show if a user is LOGGED IN but NOT verified ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-6 text-[#ededed]">
-        <div className="bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-8 rounded-2xl text-center shadow-xl">
-          <div className="w-16 h-16 bg-[#3ecf8e]/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <ShieldCheck className="w-8 h-8 text-[#3ecf8e]" />
+        <div className="bg-[#171717] border border-[#2e2e2e] max-w-md w-full p-8 rounded-2xl text-center shadow-xl">
+          <div className="w-12 h-12 bg-[#3ecf8e]/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <ShieldCheck className="w-6 h-6 text-[#3ecf8e]" />
           </div>
-          <h2 className="text-xl font-bold mb-2">Authenticator App</h2>
+          <h2 className="text-xl font-bold mb-1">Secure Your Account</h2>
+          <p className="text-[#a1a1a1] text-sm mb-6">Verification required for **OSA FAGOS** access.</p>
           
-          {mfaStatus === 'setup' ? (
-            <>
-              <p className="text-[#a1a1a1] text-sm mb-4">Scan this QR code with Google Authenticator or Authy to secure your account.</p>
-              <div 
-                className="bg-white p-2 rounded-xl inline-block mb-6"
-                dangerouslySetInnerHTML={{ __html: qrCode }} 
-              />
-            </>
-          ) : (
-            <p className="text-[#a1a1a1] text-sm mb-6">Enter the 6-digit code from your authenticator app.</p>
+          {mfaStatus === 'setup' && (
+            <div className="space-y-6 mb-6">
+              {/* QR Code Section */}
+              <div className="bg-white p-3 rounded-2xl inline-block shadow-inner">
+                <div 
+                  className="w-40 h-40"
+                  dangerouslySetInnerHTML={{ __html: qrCode }} 
+                />
+              </div>
+
+              {/* Manual Entry Section */}
+              <div className="text-left bg-[#1c1c1c] border border-[#2e2e2e] p-4 rounded-xl">
+                <div className="flex items-center gap-2 mb-2 text-[#3ecf8e]">
+                  <Info className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Manual Setup Key</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 bg-[#171717] p-2 rounded-lg border border-[#2e2e2e]">
+                  <code className="text-sm font-mono text-[#ededed] truncate">{secretKey}</code>
+                  <button 
+                    onClick={copyToClipboard}
+                    className="p-2 hover:bg-[#3ecf8e]/10 rounded-md transition-colors text-[#3ecf8e]"
+                    title="Copy Key"
+                  >
+                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
           
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <input 
-              type="text" 
-              maxLength={6}
-              value={otpInput}
-              onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
-              placeholder="000000"
-              className="w-full text-center tracking-[1em] font-mono text-xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3 rounded-lg outline-none focus:border-[#3ecf8e]"
-            />
-            {error && <p className="text-red-500 text-xs">{error}</p>}
+            <div className="text-left">
+              <label className="text-xs font-semibold text-[#a1a1a1] ml-1 mb-1 block">Enter 6-digit Authenticator Code</label>
+              <input 
+                type="text" 
+                maxLength={6}
+                value={otpInput}
+                onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                placeholder="······"
+                className="w-full text-center tracking-[0.5em] font-mono text-2xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3 rounded-xl outline-none focus:border-[#3ecf8e] focus:ring-1 focus:ring-[#3ecf8e]/50 transition-all"
+              />
+            </div>
+            {error && <p className="text-red-500 text-xs font-medium bg-red-500/10 py-2 rounded-lg">{error}</p>}
             <button 
               type="submit" 
               disabled={verifying || otpInput.length < 6}
-              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-bold py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-50"
+              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-bold py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-40 shadow-lg shadow-[#3ecf8e]/10 active:scale-[0.98]"
             >
-              {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-              {mfaStatus === 'setup' ? 'Activate Security' : 'Verify Device'}
+              {verifying ? <Loader2 className="animate-spin w-5 h-5" /> : <Check className="w-5 h-5" />}
+              {mfaStatus === 'setup' ? 'Verify and Activate' : 'Continue to Dashboard'}
             </button>
           </form>
-          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-xs text-[#a1a1a1] hover:text-[#ededed] underline">Sign out of account</button>
+
+          <button 
+            onClick={() => supabase.auth.signOut()} 
+            className="mt-8 text-xs text-[#a1a1a1] hover:text-[#3ecf8e] transition-colors"
+          >
+            Cancel and Sign Out
+          </button>
         </div>
       </div>
     );
