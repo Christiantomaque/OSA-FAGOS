@@ -23,7 +23,6 @@ export const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            // This routes them to the login page where the MFA gate in App.tsx catches them
             redirectTo: window.location.origin + '/login',
             // @ts-ignore
             flowType: 'pkce' 
@@ -46,11 +45,7 @@ export const signInWithMicrosoft = async () => {
     return data;
 };
 
-// NOTE: sendVerificationCode has been removed. 
-// MFA is now handled via Supabase TOTP (Google Authenticator) in App.tsx.
-
 export const logout = async () => {
-    // We clear the session for security on logout
     return await supabase.auth.signOut();
 };
 
@@ -70,9 +65,8 @@ export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void
 };
 
 // ==========================================
-// 2. FIRESTORE-STYLE SHIMS (CRUD)
+// 2. DATA SHIMS (CRUD)
 // ==========================================
-// These remain to ensure compatibility with your existing OSA FAGOS components.
 
 export const collection = (db: any, path: string) => ({ type: 'collection', path });
 export const doc = (db: any, path: string, id: string) => ({ type: 'doc', path, id });
@@ -88,10 +82,11 @@ export const getDocs = async (q: any) => {
             }
         }
     }
-    const { data, error } = await req;
-    if (error) throw error;
+    // CORRECTED: Only destructure the result of the awaited request
+    const { data: res, error: err } = await req;
+    if (err) throw err;
 
-    const docs = (data || []).map((d: any) => ({ 
+    const docs = (res || []).map((d: any) => ({ 
         id: d.id, 
         exists: () => true, 
         data: () => d, 
@@ -103,11 +98,7 @@ export const getDocs = async (q: any) => {
 export const getDoc = async (docRef: any) => {
     const { data, error } = await supabase.from(docRef.path).select('*').eq('id', docRef.id).maybeSingle();
     if (error) throw error;
-    return { 
-        exists: () => !!data, 
-        data: () => data || {}, 
-        get: (field: string) => data?.[field] 
-    };
+    return { exists: () => !!data, data: () => data || {}, get: (field: string) => data?.[field] };
 };
 
 export const addDoc = async (coll: any, data: any) => {
@@ -146,7 +137,6 @@ export const onSnapshot = (q: any, cb: (snapshot: any) => void) => {
 
 export const serverTimestamp = () => new Date().toISOString();
 
-// Legacy Auth Shims
 export const signInWithEmailAndPassword = async (authObj: any, email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
