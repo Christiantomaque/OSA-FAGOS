@@ -12,6 +12,8 @@ interface ServiceRecord {
   timeIn: string;
   timeOut: string;
   creditHours: number;
+  verifierSignature?: string; // Added explicitly
+  studentSignature?: string;  // Added explicitly
 }
 
 interface StudentData {
@@ -30,9 +32,12 @@ interface StudentData {
   records: ServiceRecord[];
 }
 
-// 1. SAFETY FIX: Converts React-Signature-Canvas SVGs to standard PNGs so jsPDF doesn't crash
+// Prevents jsPDF from crashing when it hits an SVG drawn by React-Signature-Canvas
 const svgDataUriToPng = async (dataUri: string | undefined): Promise<string | undefined> => {
-  if (!dataUri || !dataUri.startsWith('data:image/svg')) return dataUri;
+  if (!dataUri) return dataUri;
+  if (dataUri.startsWith('data:image/png') || dataUri.startsWith('data:image/jpeg')) return dataUri;
+  if (!dataUri.startsWith('data:image/svg')) return dataUri;
+
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
@@ -48,6 +53,7 @@ const svgDataUriToPng = async (dataUri: string | undefined): Promise<string | un
   });
 };
 
+// UPGRADED: Now fetches the image AND calculates its natural aspect ratio
 const loadLogo = async (url: string): Promise<{ base64: string; ratio: number } | null> => {
   try {
     const response = await fetch(url);
@@ -59,10 +65,15 @@ const loadLogo = async (url: string): Promise<{ base64: string; ratio: number } 
       reader.readAsDataURL(blob);
     });
 
+    // Create an invisible image element to read the natural dimensions
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve({ base64, ratio: img.width / img.height });
-      img.onerror = () => resolve({ base64, ratio: 1 });
+      img.onload = () => {
+        resolve({ base64, ratio: img.width / img.height });
+      };
+      img.onerror = () => {
+        resolve({ base64, ratio: 1 }); // Fallback to square if it fails
+      };
       img.src = base64;
     });
   } catch (error) {
@@ -72,20 +83,20 @@ const loadLogo = async (url: string): Promise<{ base64: string; ratio: number } 
 };
 
 export const generateObligationPDF = async (data: StudentData): Promise<string> => {
-  // 2. SAFETY FIX: Pre-process all signatures into safe PNGs
+  // Pre-process all signatures into safe PNGs
   const safeData = { ...data };
   safeData.studentSignature = await svgDataUriToPng(safeData.studentSignature);
   safeData.approverSignature = await svgDataUriToPng(safeData.approverSignature);
   for (let record of safeData.records) {
-    if ((record as any).verifierSignature) {
-      (record as any).verifierSignature = await svgDataUriToPng((record as any).verifierSignature);
+    if (record.verifierSignature) {
+      record.verifierSignature = await svgDataUriToPng(record.verifierSignature);
     }
-    if ((record as any).studentSignature) {
-      (record as any).studentSignature = await svgDataUriToPng((record as any).studentSignature);
+    if (record.studentSignature) {
+      record.studentSignature = await svgDataUriToPng(record.studentSignature);
     }
   }
 
-  // Set to Legal Size & Landscape Orientation (Your original layout)
+  // Set to Legal Size & Landscape Orientation
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
@@ -95,6 +106,7 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
   const pageWidth = doc.internal.pageSize.getWidth(); // 355.6 mm
   const margin = 15;
 
+  // Load the logos with their aspect ratios
   const cdmLogo = await loadLogo(cdmLogoUrl);
   const osaLogo = await loadLogo(osaLogoUrl);
 
@@ -175,9 +187,9 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
     r.taskTitle,
     r.staffName || '',
     r.timeIn,
-    '', 
+    '', // SIGN IN
     r.timeOut,
-    '', 
+    '', // SIGN OUT
     r.creditHours.toFixed(1)
   ]);
 
@@ -195,7 +207,13 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
     margin: { left: margin, right: margin },
     theme: 'grid',
     head: [
-      [{ content: 'SERVICE OBLIGATION COMPLETION FORM', colSpan: 8, styles: { halign: 'center', fontStyle: 'bold', fontSize: 10, fillColor: [255, 255, 255], textColor: [0, 0, 0], lineWidth: 0.2 } }],
+      [
+        { 
+          content: 'SERVICE OBLIGATION COMPLETION FORM', 
+          colSpan: 8, 
+          styles: { halign: 'center', fontStyle: 'bold', fontSize: 10, fillColor: [255, 255, 255], textColor: [0, 0, 0], lineWidth: 0.2 } 
+        }
+      ],
       [
         { content: 'DATE', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
         { content: 'ACTIVITY/TASK', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
@@ -211,8 +229,21 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
       ]
     ],
     body: bodyData,
-    headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontSize: 7.5, lineWidth: 0.2, lineColor: [0, 0, 0] },
-    styles: { fontSize: 7.5, cellPadding: 1.5, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.2, minCellHeight: 7.5 },
+    headStyles: { 
+      fillColor: [245, 245, 245], 
+      textColor: [0, 0, 0],
+      fontSize: 7.5,
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0]
+    },
+    styles: { 
+      fontSize: 7.5,
+      cellPadding: 1.5, 
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+      minCellHeight: 7.5 
+    },
     columnStyles: {
       0: { cellWidth: 30 }, 
       1: { cellWidth: 'auto' }, 
@@ -227,20 +258,29 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
       if (cellData.section === 'body' && cellData.row.index < safeData.records.length) {
         const record = safeData.records[cellData.row.index];
         
-        if (cellData.column.index === 2 && (record as any).verifierSignature) {
+        // Column 2: Staff Name & Signature
+        if (cellData.column.index === 2 && record.verifierSignature) {
           try {
-            const x = cellData.cell.x + 35; 
-            const y = cellData.cell.y + 1;
-            doc.addImage((record as any).verifierSignature, 'PNG', x, y, 20, 5);
+            const sigWidth = 22;
+            const sigHeight = 6;
+            // Right-align the signature perfectly inside the cell
+            const xOffset = cellData.cell.x + cellData.cell.width - sigWidth - 2; 
+            const yOffset = cellData.cell.y + (cellData.cell.height - sigHeight) / 2;
+            doc.addImage(record.verifierSignature, 'PNG', xOffset, yOffset, sigWidth, sigHeight);
           } catch (e) {}
         }
+
+        // Column 4 & 6: Student Signatures (IN & OUT)
         if ((cellData.column.index === 4 || cellData.column.index === 6)) {
-          const sSig = (record as any).studentSignature || safeData.studentSignature;
+          const sSig = record.studentSignature || safeData.studentSignature;
           if (sSig) {
              try {
-                const x = cellData.cell.x + 2;
-                const y = cellData.cell.y + 1;
-                doc.addImage(sSig, 'PNG', x, y, 18, 5);
+                const sigWidth = 16;
+                const sigHeight = 5;
+                // Center the student signature
+                const xOffset = cellData.cell.x + (cellData.cell.width - sigWidth) / 2;
+                const yOffset = cellData.cell.y + (cellData.cell.height - sigHeight) / 2;
+                doc.addImage(sSig, 'PNG', xOffset, yOffset, sigWidth, sigHeight);
              } catch (e) {}
           }
         }

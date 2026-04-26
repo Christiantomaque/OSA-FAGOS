@@ -706,16 +706,22 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         approverName: student.approval?.approverName || adminDoc?.displayName || 'Authorized Representative',
         approverRole: student.approval?.approverRole || (adminDoc?.role === 'admin' ? 'OSA Admin' : 'OSA Staff'),
         approverSignature: adminDoc?.signature || student.approval?.approverSignature,
-        records: student.records.filter(r => r.status === 'verified').map(r => ({
-          date: r.date,
-          taskTitle: r.taskTitle,
-          staffName: (r as any).staffName || 'OSA Staff',
-          timeIn: formatTime(r.timeIn),
-          timeOut: formatTime(r.timeOut),
-          creditHours: r.creditHours,
-          verifierSignature: (r as any).verifierSignature,
-          studentSignature: (r as any).studentSignature
-        }))
+        records: student.records.filter(r => r.status === 'verified').map(r => {
+          
+          // FIX: Look up the actual staff member to pull their live signature!
+          const liveStaff = members.find(m => m.id === (r as any).verifiedById);
+          
+          return {
+            date: r.date,
+            taskTitle: r.taskTitle,
+            staffName: (r as any).staffName || 'OSA Staff',
+            timeIn: formatTime(r.timeIn),
+            timeOut: formatTime(r.timeOut),
+            creditHours: r.creditHours,
+            verifierSignature: liveStaff?.signature || (r as any).verifierSignature || adminDoc?.signature,
+            studentSignature: (r as any).studentSignature
+          };
+        })
       });
 
       // Safely convert base64 to a Blob and open it in a new browser tab for viewing/printing
@@ -772,10 +778,10 @@ const handleApproveCompletion = async (student: StudentProgress) => {
     if (endObj.getTime() <= startObj.getTime()) {
       endObj.setDate(endObj.getDate() + 1);
     }
-    
+
     // FIX: Removed the 15-minute early buffer. Must be exact time.
     return now.getTime() >= startObj.getTime() && now.getTime() <= endObj.getTime();
-  };
+  }; // --------------------end of handlers and helpers--------------------//
 
   const studentProgressRaw = Object.values(
     // Sort by date to ensure we can identify the "latest" name

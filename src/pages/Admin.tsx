@@ -863,9 +863,6 @@ const handleApproveCompletion = async (student: StudentProgress) => {
   // --- NEW FEATURE: PREVIEW / PRINT PDF ---
   const handlePreviewPDF = async (student: StudentProgress) => {
     try {
-      // Final Safety Net: Trigger backend sweep before generation
-      await fetch('/api/generate-pdf', { method: 'POST' });
-
       const latestRecord = [...student.records].sort((a, b) => b.date.localeCompare(a.date))[0];
       const adminDoc = members.find(m => m.email === user?.email);
 
@@ -883,16 +880,22 @@ const handleApproveCompletion = async (student: StudentProgress) => {
         approverName: student.approval?.approverName || adminDoc?.displayName || 'Authorized Representative',
         approverRole: student.approval?.approverRole || (adminDoc?.role === 'admin' ? 'OSA Admin' : 'OSA Staff'),
         approverSignature: adminDoc?.signature || student.approval?.approverSignature,
-        records: student.records.filter(r => r.status === 'verified').map(r => ({
-          date: r.date,
-          taskTitle: r.taskTitle,
-          staffName: (r as any).staffName || 'OSA Staff',
-          timeIn: formatTime(r.timeIn),
-          timeOut: formatTime(r.timeOut),
-          creditHours: r.creditHours,
-          verifierSignature: (r as any).verifierSignature,
-          studentSignature: (r as any).studentSignature
-        }))
+        records: student.records.filter(r => r.status === 'verified').map(r => {
+          
+          // FIX: Look up the actual staff member to pull their live signature!
+          const liveStaff = members.find(m => m.id === (r as any).verifiedById);
+          
+          return {
+            date: r.date,
+            taskTitle: r.taskTitle,
+            staffName: (r as any).staffName || 'OSA Staff',
+            timeIn: formatTime(r.timeIn),
+            timeOut: formatTime(r.timeOut),
+            creditHours: r.creditHours,
+            verifierSignature: liveStaff?.signature || (r as any).verifierSignature || adminDoc?.signature,
+            studentSignature: (r as any).studentSignature
+          };
+        })
       });
 
       // Safely convert base64 to a Blob and open it in a new browser tab for viewing/printing
