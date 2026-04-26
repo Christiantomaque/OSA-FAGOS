@@ -1,5 +1,5 @@
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface ServiceRecord {
   date: string;
@@ -28,7 +28,7 @@ interface StudentData {
 
 const svgDataUriToPng = async (dataUri: string | undefined): Promise<string | undefined> => {
   if (!dataUri || !dataUri.startsWith('data:image/svg')) return dataUri;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
@@ -44,7 +44,6 @@ const svgDataUriToPng = async (dataUri: string | undefined): Promise<string | un
 };
 
 export const generateObligationPDF = async (data: StudentData): Promise<string> => {
-  // Pre-process any SVG signatures to PNG because jsPDF might crash on SVGs natively
   const safeData = { ...data };
   safeData.studentSignature = await svgDataUriToPng(safeData.studentSignature);
   safeData.approverSignature = await svgDataUriToPng(safeData.approverSignature);
@@ -66,7 +65,7 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;
 
-  // Header Section matching img2
+  // Header Section
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.setTextColor(0, 0, 0);
@@ -78,11 +77,11 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.setTextColor(51, 102, 204); // CDM Blue style
+  doc.setTextColor(51, 102, 204); 
   doc.text('Office of Student Affairs', pageWidth / 2, 31, { align: 'center' });
   
   doc.setFontSize(10);
-  doc.setTextColor(204, 0, 0); // CDM Red style
+  doc.setTextColor(204, 0, 0); 
   const semAY = `${safeData.semester || '1st Semester'} (A.Y. ${safeData.academicYear || '2025 - 2026'})`;
   doc.text(semAY, pageWidth / 2, 36, { align: 'center' });
 
@@ -97,7 +96,7 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
   doc.text(title, pageWidth / 2, 45, { align: 'center' });
   doc.line(pageWidth / 2 - titleWidth / 2 - 2, 46.5, pageWidth / 2 + titleWidth / 2 + 2, 46.5);
 
-  // Student Info Grid matching img2
+  // Student Info Grid
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   
@@ -125,9 +124,8 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
   doc.text(`: ${safeData.section}`, col1X + 25, infoY + 14);
   doc.line(col1X + 27, infoY + 15, col1X + 90, infoY + 15);
 
-  // Table matching img2 Columns
-  // DATE | ACTIVITY/TASK | NAME OF AUTHORIZED FACULTY/STAFF & SIGNATURE | IN | SIGN | OUT | SIGN | CH
-  (doc as any).autoTable({
+  // THE FIX: Use autoTable(doc, {...}) instead of doc.autoTable
+  autoTable(doc, {
     startY: 80,
     head: [['DATE', 'ACTIVITY/TASK', 'NAME OF AUTHORIZED FACULTY/STAFF & SIGNATURE', 'IN', 'SIGN', 'OUT', 'SIGN', 'CH']],
     body: safeData.records.map(r => [
@@ -135,9 +133,9 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
       r.taskTitle,
       r.staffName || '',
       r.timeIn,
-      '', // SIGN IN (Space for student signature)
+      '', 
       r.timeOut,
-      '', // SIGN OUT (Space for student signature)
+      '', 
       r.creditHours.toFixed(1)
     ]),
     margin: { left: margin, right: margin },
@@ -157,40 +155,36 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
       textColor: [0, 0, 0],
       lineColor: [0, 0, 0],
       lineWidth: 0.1,
-      minCellHeight: 12 // Ensure enough room for signatures
+      minCellHeight: 12 
     },
     columnStyles: {
-      0: { cellWidth: 18 }, // DATE
-      1: { cellWidth: 'auto' }, // TASK
-      2: { cellWidth: 45 }, // STAFF & SIGN
-      3: { cellWidth: 10, halign: 'center' }, // IN
-      4: { cellWidth: 12 }, // SIGN
-      5: { cellWidth: 10, halign: 'center' }, // OUT
-      6: { cellWidth: 12 }, // SIGN
-      7: { cellWidth: 8, halign: 'center' } // CH
+      0: { cellWidth: 18 }, 
+      1: { cellWidth: 'auto' }, 
+      2: { cellWidth: 45 }, 
+      3: { cellWidth: 10, halign: 'center' }, 
+      4: { cellWidth: 12 }, 
+      5: { cellWidth: 10, halign: 'center' }, 
+      6: { cellWidth: 12 }, 
+      7: { cellWidth: 8, halign: 'center' } 
     },
     didDrawCell: (cellData: any) => {
-      // After drawing the text, we can add the signature image if it exists
       if (cellData.section === 'body') {
         const record = safeData.records[cellData.row.index];
         if (!record) return;
 
-        // Staff/Verifier Signature in Column 2
         if (cellData.column.index === 2) {
           const vSig = (record as any).verifierSignature;
           if (vSig) {
             try {
-              // Position signature relative to cell
               const x = cellData.cell.x + 23; 
               const y = cellData.cell.y + 2;
               doc.addImage(vSig, 'PNG', x, y, 18, 8);
             } catch (e) {
-              console.error("PDF: Failed to add verifier signature to table", e);
+              console.error("PDF: Failed to add verifier signature", e);
             }
           }
         }
 
-        // Student Signature in Column 4 and 6 (Optional based on requirements)
         if (cellData.column.index === 4 || cellData.column.index === 6) {
           const sSig = (record as any).studentSignature || safeData.studentSignature;
           if (sSig) {
@@ -207,14 +201,14 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
 
   let finalY = (doc as any).lastAutoTable.finalY + 5;
 
-  // Total Hours with Circle matching img2
+  // Total Hours
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.text(`TOTAL HOURS: ${safeData.totalVerifiedHours.toFixed(1)}`, pageWidth - margin - 5, finalY + 4, { align: 'right' });
   doc.setLineWidth(0.3);
-  doc.ellipse(pageWidth - margin - 2, finalY + 3, 10, 5); // Simple circle around total
+  doc.ellipse(pageWidth - margin - 2, finalY + 3, 10, 5);
 
-  // Footnote Reminders (img2 list)
+  // Footnote Reminders
   const footnoteY = finalY + 15;
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
@@ -232,16 +226,15 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
   ];
   
   let currentFootnoteY = footnoteY;
-  footnotes.forEach((note, i) => {
+  footnotes.forEach((note) => {
     doc.text(note, margin, currentFootnoteY);
     currentFootnoteY += 3.5;
   });
 
-  // Final Signatures Area matching img2
+  // Final Signatures Area
   const sigY = currentFootnoteY + 15;
   doc.setFontSize(9);
   
-  // Left: Scholar Signature
   if (safeData.studentSignature) {
     try {
       doc.addImage(safeData.studentSignature, 'PNG', margin + 5, sigY - 12, 35, 12);
@@ -257,7 +250,6 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
   doc.setFont('helvetica', 'bold');
   doc.text('SCHOLAR\'S PRINTED NAME AND SIGNATURE/ DATE', margin + 5, sigY + 6);
 
-  // Right: Noted By
   const approverX = 130;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
