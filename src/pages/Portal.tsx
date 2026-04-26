@@ -9,8 +9,8 @@ import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
 // --- Image Placeholders ---
-import cdmLogo = '/logo/images/cdmlogo.png';
-const osaLogo = '/logo/images/osalogo.png';
+import cdmLogo from '../logo/images/cdmlogo.png';
+import osaLogo from '../logo/images/osalogo.png';
 
 // --- Types ---
 type Task = {
