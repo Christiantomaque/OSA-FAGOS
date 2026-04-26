@@ -14,7 +14,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<any>(null);
   
-  // MFA States
   const [mfaStatus, setMfaStatus] = useState<'checking' | 'setup' | 'verify' | 'verified'>('checking');
   const [qrCode, setQrCode] = useState('');
   const [secretKey, setSecretKey] = useState(''); 
@@ -48,7 +47,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // Loop-breaker: Nuke old unverified attempts
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
@@ -141,7 +139,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // --- THE COMPACT GATE ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
@@ -152,12 +149,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           
           {mfaStatus === 'setup' && (
             <div className="space-y-4 mb-6">
-              {/* QR Image Fix */}
               <div className="bg-white p-2 rounded-lg inline-block mx-auto">
                 <img src={qrCode} alt="QR" className="w-32 h-32" />
               </div>
 
-              {/* Compact Manual Section */}
               <div className="text-left space-y-1">
                 <span className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">Manual Key</span>
                 <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg">
