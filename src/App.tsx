@@ -8,7 +8,7 @@ import StudentAssistant from './pages/StudentAssistant';
 import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
-import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertCircle } from 'lucide-react';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
@@ -23,6 +23,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // PREVENT RACE CONDITIONS
   const isProcessing = useRef(false);
   const navigate = useNavigate();
 
@@ -34,31 +35,36 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       try {
         if (u) {
           setUser(u);
-          const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          const { data: aalData, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           
+          if (aalErr) throw aalErr;
+
           if (aalData?.currentLevel === 'aal2') {
             setMfaStatus('verified');
             handleRoleRouting(u);
           } else {
-            const { data: factorsData } = await supabase.auth.mfa.listFactors();
+            const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
+            if (factorsErr) throw factorsErr;
+
             const verifiedFactor = factorsData?.totp?.find(f => (f.status as string) === 'verified');
 
             if (verifiedFactor) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
+              // Loop-Breaker: Nuke stuck factors
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
                 }
               }
 
-              const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({ 
+              const { data: enrollData, error: enrollErr } = await supabase.auth.mfa.enroll({ 
                 factorType: 'totp',
                 friendlyName: 'OSA FAGOS Authenticator' 
               });
               
-              if (enrollError) throw enrollError;
+              if (enrollErr) throw enrollErr;
               
               setFactorId(enrollData.id);
               setQrCode(enrollData.totp.qr_code);
@@ -72,8 +78,17 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       } catch (err: any) {
         console.error("Auth Guard Error:", err.message);
+
+        // 403 GHOST RECOVERY: Clear local storage if JWT user is missing
+        if (err.message.includes("sub claim") || err.status === 403) {
+          await supabase.auth.signOut();
+          localStorage.clear();
+          window.location.reload();
+          return;
+        }
+
         if (u) {
-          setError(err.message || "Handshake failed.");
+          setError(err.message || "Security sync failed.");
           setMfaStatus('setup'); 
         } else {
           setMfaStatus('verified');
@@ -142,20 +157,25 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
-        <div className="bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-6 rounded-xl text-center shadow-xl">
+        <div className="bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-6 rounded-xl text-center shadow-2xl">
           <ShieldCheck className="w-8 h-8 text-[#3ecf8e] mx-auto mb-3" />
-          <h2 className="text-lg font-bold mb-1">MFA Verification</h2>
-          <p className="text-[#a1a1a1] text-[10px] mb-6 uppercase tracking-widest font-semibold">Secure Official Session</p>
+          <h2 className="text-lg font-bold mb-1 tracking-tight">System Security</h2>
+          <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-widest font-semibold">Two-Step Verification</p>
           
           {mfaStatus === 'setup' && (
             <div className="space-y-4 mb-6">
+              {/* FIXED QR IMAGE: Correctly renders data URLs */}
               <div className="bg-white p-2 rounded-lg inline-block mx-auto">
-                <img src={qrCode} alt="QR" className="w-32 h-32" />
+                {qrCode.startsWith('data:image') ? (
+                  <img src={qrCode} alt="QR" className="w-32 h-32 object-contain" />
+                ) : (
+                  <div className="w-32 h-32 flex items-center justify-center" dangerouslySetInnerHTML={{ __html: qrCode }} />
+                )}
               </div>
 
-              <div className="text-left space-y-1">
+              <div className="text-left space-y-1 px-1">
                 <span className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">Manual Key</span>
-                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg">
+                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg transition-all hover:border-[#3ecf8e]/30">
                   <code className="text-[11px] font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
                   <button onClick={handleCopyKey} className="ml-2 text-[#3ecf8e]">
                     {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -165,27 +185,32 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             </div>
           )}
           
-          <form onSubmit={handleVerifyOtp} className="space-y-3">
+          <form onSubmit={handleVerifyOtp} className="space-y-3 px-1">
             <div className="text-left space-y-1">
-              <label className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">6-Digit Code</label>
+              <label className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">Authenticator Code</label>
               <input 
                 type="text" maxLength={6} value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full text-center tracking-[0.5em] font-mono text-xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-2.5 rounded-lg outline-none focus:border-[#3ecf8e] transition-all"
+                className="w-full text-center tracking-[0.4em] font-mono text-xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-2.5 rounded-lg outline-none focus:border-[#3ecf8e]"
               />
             </div>
-            {error && <p className="text-red-500 text-[9px] font-bold bg-red-500/10 py-2 rounded-md">{error}</p>}
+            {error && (
+              <div className="flex items-center gap-2 text-red-500 text-[10px] font-bold bg-red-500/10 p-2 rounded-lg border border-red-500/20">
+                <AlertCircle className="w-3 h-3" />
+                {error}
+              </div>
+            )}
             <button 
               type="submit" disabled={verifying || otpInput.length < 6}
               className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase text-[10px] py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-40"
             >
               {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-              Verify Session
+              Authorize Session
             </button>
           </form>
 
-          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#666] hover:text-[#ededed] transition-colors uppercase font-bold tracking-tighter">
+          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#666] hover:text-[#ededed] transition-colors uppercase font-bold">
             Sign out of account
           </button>
         </div>

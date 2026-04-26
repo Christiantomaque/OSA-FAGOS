@@ -82,7 +82,7 @@ export const getDocs = async (q: any) => {
             }
         }
     }
-    // CORRECTED: Only destructure the result of the awaited request
+    // Corrected destructuring to fix TypeScript 2339
     const { data: res, error: err } = await req;
     if (err) throw err;
 
