@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X, CheckSquare } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { generateObligationPDF } from '../utils/pdfGenerator';
-import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM, formatDynamicTimeDisplay } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM, formatDynamicTime } from '../lib/utils';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
 import { AlertModal } from '../components/ui/AlertModal';
@@ -1119,7 +1119,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               <span className="text-[9px] font-bold text-[#ededed]">{records.filter(r => r.taskTitle === t.title && r.date === t.date).length} / {t.capacity || 1}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-1.5 text-[#3ecf8e] font-bold text-[10px]">{t.duration?.toFixed(1)} {Number(t.duration) === 1 ? 'hr' : 'hrs'}</td>
+                          <td className="px-3 py-1.5 text-[#3ecf8e] font-bold text-[10px]">{formatDynamicTime(Number(t.duration) * 3600)}</td>
                           <td className="px-3 py-1.5 text-right">
                             <div className="flex justify-end gap-1.5">
                                {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
@@ -1320,7 +1320,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                              {r.bracket && <div><span className="text-[#666] mr-1">Bracket:</span>{r.bracket}</div>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))}</td>
+                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{formatDynamicTime(Math.floor((r.creditHours || 0) * 3600))}</td>
                         <td className="px-6 py-4">
                            <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
                            {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
@@ -1414,7 +1414,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
-                        <div className="font-bold text-[#3ecf8e] text-xl">{formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))}</div>
+                        <div className="font-bold text-[#3ecf8e] text-xl">{formatDynamicTime(Math.floor((r.creditHours || 0) * 3600))}</div>
                       </div>
                     </div>
                     

@@ -6,31 +6,19 @@ const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime, onTime
   const hasFired = useRef(false);
 
   useEffect(() => {
-    if (!startTime) {
-      setTotalSeconds(accumulatedSeconds);
-      return;
-    }
-
-    const start = new Date(startTime).getTime();
     let endTarget = Infinity;
-
     if (scheduledEndTime) {
        const end = new Date(scheduledEndTime).getTime();
        endTarget = end;
-       if (endTarget <= start) {
+       if (endTarget <= (startTime ? new Date(startTime).getTime() : Date.now())) {
           const d = new Date(endTarget);
           d.setDate(d.getDate() + 1);
           endTarget = d.getTime();
        }
     }
 
-    const updateClock = () => {
-      const now = Date.now();
-      
-      if (now >= endTarget) {
-        const delta = Math.floor((endTarget - start) / 1000);
-        setTotalSeconds(accumulatedSeconds + delta);
-        
+    const checkCutoff = () => {
+      if (Date.now() >= endTarget) {
         if (!isAutoStopped) {
            setIsAutoStopped(true);
            if (onTimeUp && !hasFired.current) {
@@ -39,10 +27,26 @@ const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime, onTime
            }
         }
         return true; 
-      } else {
-        setTotalSeconds(accumulatedSeconds + Math.floor((now - start) / 1000));
-        return false; 
       }
+      return false;
+    };
+
+    // If PAUSED (!startTime), still check for the cutoff every second
+    if (!startTime) {
+      setTotalSeconds(accumulatedSeconds);
+      if (checkCutoff()) return;
+      const pausedInterval = setInterval(() => {
+        if (checkCutoff()) clearInterval(pausedInterval);
+      }, 1000);
+      return () => clearInterval(pausedInterval);
+    }
+
+    // If ACTIVE, run the standard ticking clock
+    const start = new Date(startTime).getTime();
+    const updateClock = () => {
+      if (checkCutoff()) return true;
+      setTotalSeconds(accumulatedSeconds + Math.floor((Date.now() - start) / 1000));
+      return false; 
     };
 
     if (updateClock()) return;
@@ -90,7 +94,7 @@ import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X, CheckSquare } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { generateObligationPDF } from '../utils/pdfGenerator';
-import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM, formatDynamicTimeDisplay } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM, formatDynamicTime } from '../lib/utils';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
 import { AlertModal } from '../components/ui/AlertModal';
@@ -685,30 +689,29 @@ export default function Admin() {
   };
 
   const handleAutoComplete = async (record: ServiceRecord) => {
-    // Only act if the record is currently running
-    if (record.status !== 'active') return; 
+    // REQUIRED: Must process both active and paused records
+    if (record.status !== 'active' && record.status !== 'paused') return; 
 
     try {
       const endObj = new Date(record.scheduledEndTime || tasks.find(t => t.title === record.taskTitle && t.date === record.date)?.endTime || Date.now());
-      const startObj = new Date(record.timeIn || record.startTime || Date.now());
+      const startObj = new Date(record.timeIn || record.startTime);
       
       let durationHours = (endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60);
       if (durationHours < 0) durationHours = 0;
       const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
 
-      // "Clock them out" but wait for Admin verification
       await updateDoc(doc(db, 'service_records', record.id), {
         timeOut: endObj.toISOString(),
         creditHours: creditHours,
         accumulated_seconds: Math.floor((endObj.getTime() - startObj.getTime()) / 1000),
         startTime: null,
-        status: 'pending', // <--- CRITICAL: Must be 'pending' so the Admin can manually click Approve
+        status: 'pending', // REQUIRED: Sets to pending for manual approval
         updatedAt: serverTimestamp()
       });
       
       showAlert("Time Up", `${record.studentName}'s session has automatically ended. Awaiting your approval.`, "success");
     } catch (e: any) {
-      console.error("Auto-complete failed: ", e);
+       console.error("Auto-complete failed: ", e);
     }
   };
 
@@ -1296,7 +1299,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               <span className="text-[9px] font-bold text-[#ededed]">{records.filter(r => r.taskTitle === t.title && r.date === t.date).length} / {t.capacity || 1}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-1.5 text-[#3ecf8e] font-bold text-[10px]">{t.duration?.toFixed(1)} {Number(t.duration) === 1 ? 'hr' : 'hrs'}</td>
+                          <td className="px-3 py-1.5 text-[#3ecf8e] font-bold text-[10px]">{formatDynamicTime(Number(t.duration) * 3600)}</td>
                           <td className="px-3 py-1.5 text-right">
                             <div className="flex justify-end gap-1.5">
                                {records.some(r => r.taskTitle === t.title && r.date === t.date) ? (
@@ -1506,7 +1509,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               onTimeUp={() => handleAutoComplete(r)} 
                             />
                           ) : (
-                            formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
+                            formatDynamicTime(Math.floor((r.creditHours || 0) * 3600))
                           )}
                         </td>
                         <td className="px-6 py-4">
@@ -1522,71 +1525,86 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end items-center gap-2">
-                            {(r.status === 'pending' || r.status === 'active' || r.status === 'paused') && (
+                          {r.status === 'pending' ? (
+                            <div className="flex gap-2 justify-end">
                               <button 
-                                onClick={() => {
-                                  const expired = isAutoStoppedIllusion(r);
-                                  if (!checkIsWithinSchedule(r) || expired) {
-                                    showAlert("Unauthorized", expired ? "Session has automatically ended." : "This task can only be started/stopped during its assigned window.", "warning");
-                                    return;
+                                onClick={() => handleVerify(r.id, r.status)}
+                                className="bg-[#3ecf8e] text-black px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all hover:bg-[#3ecf8e]/80"
+                              >
+                                Approve
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteRecord(r.id)}
+                                className="bg-red-500 text-white px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all hover:bg-red-600"
+                              >
+                                Disapprove
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end items-center gap-2">
+                              {(r.status === 'active' || r.status === 'paused') && (
+                                <button 
+                                  onClick={() => {
+                                    const expired = isAutoStoppedIllusion(r);
+                                    if (!checkIsWithinSchedule(r) || expired) {
+                                      showAlert("Unauthorized", expired ? "Session has automatically ended." : "This task can only be started/stopped during its assigned window.", "warning");
+                                      return;
+                                    }
+                                    if (!r.startTime) handleStartSession(r);
+                                    else handlePauseSession(r);
+                                  }}
+                                  className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                                    r.creditHours >= 20 
+                                      ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                      : (!checkIsWithinSchedule(r) || isAutoStoppedIllusion(r))
+                                        ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                        : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
+                                  }`}
+                                  disabled={r.creditHours >= 20 || isAutoStoppedIllusion(r)}
+                                  title={
+                                    r.creditHours >= 20 
+                                      ? "Completed" 
+                                      : isAutoStoppedIllusion(r)
+                                        ? "Auto-Stopped"
+                                        : !checkIsWithinSchedule(r) 
+                                          ? "Outside assigned schedule" 
+                                          : (!r.startTime ? "Start/Resume Session" : "Pause Session")
                                   }
-                                  if (!r.startTime) handleStartSession(r);
-                                  else handlePauseSession(r);
-                                }}
-                                className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                                  r.creditHours >= 20 
-                                    ? 'bg-gray-600 cursor-not-allowed text-white' 
-                                    : (!checkIsWithinSchedule(r) || isAutoStoppedIllusion(r))
-                                      ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                      : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
-                                }`}
-                                disabled={r.creditHours >= 20 || isAutoStoppedIllusion(r)}
-                                title={
-                                  r.creditHours >= 20 
-                                    ? "Completed" 
-                                    : isAutoStoppedIllusion(r)
-                                      ? "Auto-Stopped"
-                                      : !checkIsWithinSchedule(r) 
-                                        ? "Outside assigned schedule" 
-                                        : (!r.startTime ? "Start/Resume Session" : "Pause Session")
-                                }
-                              >
-                                <Clock className="w-3 h-3" /> 
-                                {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? (r.accumulated_seconds ? 'Resume' : 'Start') : 'Pause')}
-                              </button>
-                            )}
-                            
-                            {(r.status === 'active' || r.status === 'paused') && (
+                                >
+                                  <Clock className="w-3 h-3" /> 
+                                  {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? (r.accumulated_seconds ? 'Resume' : 'Start') : 'Pause')}
+                                </button>
+                              )}
+                              
+                              {(r.status === 'active' || r.status === 'paused') && (
+                                <button 
+                                  onClick={() => handleClockOut(r)}
+                                  className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
+                                  title="Complete Session"
+                                  disabled={isAutoStoppedIllusion(r)}
+                                >
+                                  <CheckSquare className="w-3 h-3" /> 
+                                  Complete
+                                </button>
+                              )}
+                              
+                              <button onClick={() => handleEditRecord(r)} className="p-1 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleDeleteRecord(r.id)} className="p-1 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <div className="w-px h-4 bg-[#2e2e2e] mx-1"></div>
+                              
                               <button 
-                                onClick={() => handleClockOut(r)}
-                                className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
-                                title="Complete Session"
-                                disabled={isAutoStoppedIllusion(r)}
-                              >
-                                <CheckSquare className="w-3 h-3" /> 
-                                Complete
-                              </button>
-                            )}
-                            
-                            <button onClick={() => handleEditRecord(r)} className="p-1 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => handleDeleteRecord(r.id)} className="p-1 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
-                            <div className="w-px h-4 bg-[#2e2e2e] mx-1"></div>
-                            
-                            <button 
-                              onClick={() => handleVerify(r.id, r.status)}
-                              disabled={r.status === 'active'}
-                              className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors ${
-                                r.status === 'active' 
-                                  ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                  : r.status === 'pending' 
-                                    ? 'bg-[#3ecf8e] text-black hover:bg-[#34b27b] shadow-[0_0_10px_rgba(62,207,142,0.2)]'
+                                onClick={() => handleVerify(r.id, r.status)}
+                                disabled={r.status === 'active'}
+                                className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors ${
+                                  r.status === 'active' 
+                                    ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
                                     : 'border border-[#2e2e2e] text-[#a1a1a1] hover:bg-[#262626] hover:text-[#ededed]'
-                              }`}
-                            >
-                              {r.status === 'verified' ? 'Unapprove' : 'Approve'}
-                            </button>
-                          </div>
+                                }`}
+                              >
+                                {r.status === 'verified' ? 'Unapprove' : 'Approve'}
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1626,7 +1644,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                               onTimeUp={() => handleAutoComplete(r)} 
                             />
                           ) : (
-                            formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
+                            formatDynamicTime(Math.floor((r.creditHours || 0) * 3600))
                           )}
                         </div>
                       </div>
@@ -1644,67 +1662,86 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                     </div>
 
                     <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">
-                      <div className="flex gap-1">
-                        {(r.status === 'pending' || r.status === 'active' || r.status === 'paused') && (
+                      {r.status === 'pending' ? (
+                        <div className="flex gap-2 w-full justify-between">
                           <button 
-                            onClick={() => {
-                              const expired = isAutoStoppedIllusion(r);
-                              if (!checkIsWithinSchedule(r) || expired) {
-                                showAlert("Unauthorized", expired ? "Session has automatically ended." : "This task can only be started/stopped during its assigned window.", "warning");
-                                return;
-                              }
-                              if (!r.startTime) handleStartSession(r);
-                              else handlePauseSession(r);
-                            }}
-                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
-                              r.creditHours >= 20 
-                                ? 'bg-gray-600 cursor-not-allowed text-white' 
-                                : (!checkIsWithinSchedule(r) || isAutoStoppedIllusion(r))
-                                  ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                  : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
+                            onClick={() => handleVerify(r.id, r.status)}
+                            className="bg-[#3ecf8e] text-black w-full py-1.5 rounded text-[10px] font-bold uppercase transition-all hover:bg-[#3ecf8e]/80 flex items-center justify-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteRecord(r.id)}
+                            className="bg-red-500 text-white w-full py-1.5 rounded text-[10px] font-bold uppercase transition-all hover:bg-red-600 flex items-center justify-center gap-1"
+                          >
+                            <X className="w-3.5 h-3.5" /> Disapprove
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex gap-1">
+                            {(r.status === 'active' || r.status === 'paused') && (
+                              <button 
+                                onClick={() => {
+                                  const expired = isAutoStoppedIllusion(r);
+                                  if (!checkIsWithinSchedule(r) || expired) {
+                                    showAlert("Unauthorized", expired ? "Session has automatically ended." : "This task can only be started/stopped during its assigned window.", "warning");
+                                    return;
+                                  }
+                                  if (!r.startTime) handleStartSession(r);
+                                  else handlePauseSession(r);
+                                }}
+                                className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
+                                  r.creditHours >= 20 
+                                    ? 'bg-gray-600 cursor-not-allowed text-white' 
+                                    : (!checkIsWithinSchedule(r) || isAutoStoppedIllusion(r))
+                                      ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                      : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
+                                }`}
+                                disabled={r.creditHours >= 20 || isAutoStoppedIllusion(r)}
+                                title={
+                                  r.creditHours >= 20 
+                                    ? "Completed" 
+                                    : isAutoStoppedIllusion(r)
+                                      ? "Auto-Stopped"
+                                      : !checkIsWithinSchedule(r) 
+                                        ? "Outside assigned schedule" 
+                                        : (!r.startTime ? "Start/Resume Session" : "Pause Session")
+                                }
+                              >
+                                <Clock className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? (r.accumulated_seconds ? 'Resume' : 'Start') : 'Pause')}</span>
+                              </button>
+                            )}
+                            {(r.status === 'active' || r.status === 'paused') && (
+                              <button 
+                                onClick={() => handleClockOut(r)}
+                                className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
+                                title="Complete Session"
+                                disabled={isAutoStoppedIllusion(r)}
+                              >
+                                <CheckSquare className="w-3.5 h-3.5" /> 
+                                <span className="text-[10px] font-bold uppercase">Complete</span>
+                              </button>
+                            )}
+                            <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                          <button 
+                            onClick={() => handleVerify(r.id, r.status)} 
+                            disabled={r.status === 'active'}
+                            className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${
+                              r.status === 'active' 
+                                ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
+                                : (r.status as string) === 'pending' 
+                                  ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' 
+                                  : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'
                             }`}
-                            disabled={r.creditHours >= 20 || isAutoStoppedIllusion(r)}
-                            title={
-                              r.creditHours >= 20 
-                                ? "Completed" 
-                                : isAutoStoppedIllusion(r)
-                                  ? "Auto-Stopped"
-                                  : !checkIsWithinSchedule(r) 
-                                    ? "Outside assigned schedule" 
-                                    : (!r.startTime ? "Start/Resume Session" : "Pause Session")
-                            }
                           >
-                            <Clock className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? (r.accumulated_seconds ? 'Resume' : 'Start') : 'Pause')}</span>
+                             {r.status === 'verified' ? 'Unapprove' : 'Approve'}
                           </button>
-                        )}
-                        {(r.status === 'active' || r.status === 'paused') && (
-                          <button 
-                            onClick={() => handleClockOut(r)}
-                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
-                            title="Complete Session"
-                            disabled={isAutoStoppedIllusion(r)}
-                          >
-                            <CheckSquare className="w-3.5 h-3.5" /> 
-                            <span className="text-[10px] font-bold uppercase">Complete</span>
-                          </button>
-                        )}
-                        <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-[#a1a1a1] hover:text-red-500 transition-colors" title="Delete Log"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                      <button 
-                        onClick={() => handleVerify(r.id, r.status)} 
-                        disabled={r.status === 'active'}
-                        className={`text-[10px] px-4 py-1.5 rounded font-bold uppercase transition-all ${
-                          r.status === 'active' 
-                            ? 'border border-[#2e2e2e] text-[#666] cursor-not-allowed'
-                            : r.status === 'pending' 
-                              ? 'bg-[#3ecf8e] text-black hover:bg-[#3ecf8e]/80 shadow-[0_0_10px_rgba(62,207,142,0.2)]' 
-                              : 'border border-[#2e2e2e] text-[#a1a1a1] hover:text-[#ededed]'
-                        }`}
-                      >
-                         {r.status === 'verified' ? 'Unapprove' : 'Approve'}
-                      </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
