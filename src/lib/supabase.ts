@@ -49,7 +49,6 @@ export const signInWithMicrosoft = async () => {
     return data;
 };
 
-// RESTORED: Missing logout export
 export const logout = async () => {
     return await supabase.auth.signOut();
 };
@@ -70,7 +69,7 @@ export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void
 };
 
 // ==========================================
-// 2. DATA SHIMS (CRUD) - FULLY RESTORED
+// 2. DATA SHIMS (CRUD) 
 // ==========================================
 
 export const collection = (db: any, path: string) => ({ type: 'collection', path });
@@ -97,41 +96,56 @@ export const getDoc = async (docRef: any) => {
     return { exists: () => !!data, data: () => data || {}, get: (field: string) => data?.[field] };
 };
 
-// RESTORED: options?: any added back to fix "Expected 2 arguments, but got 3" error
 export const setDoc = async (docRef: any, data: any, options?: any) => {
     const { error } = await supabase.from(docRef.path).upsert([{ id: docRef.id, ...data }]);
     if (error) throw error;
 };
 
-// RESTORED: Missing addDoc export
 export const addDoc = async (coll: any, data: any) => {
     const { data: res, error } = await supabase.from(coll.path).insert([data]).select().single();
     if (error) throw error;
     return { id: res?.id };
 };
 
-// RESTORED: Missing updateDoc export
 export const updateDoc = async (docRef: any, data: any) => {
     const { error } = await supabase.from(docRef.path).update(data).eq('id', docRef.id);
     if (error) throw error;
 };
 
-// RESTORED: Missing deleteDoc export
 export const deleteDoc = async (docRef: any) => {
     const { error } = await supabase.from(docRef.path).delete().eq('id', docRef.id);
     if (error) throw error;
 };
 
-// RESTORED: Missing onSnapshot export
+// THE FIX: This now accurately reads single documents (like Settings) vs full collections
 export const onSnapshot = (q: any, cb: (snapshot: any) => void) => {
-    getDocs(q).then(cb);
+    const isDoc = q.type === 'doc';
+
+    const fetchUpdate = async () => {
+        try {
+            if (isDoc) {
+                const snap = await getDoc(q);
+                cb(snap);
+            } else {
+                const snap = await getDocs(q);
+                cb(snap);
+            }
+        } catch (e) {
+            console.error("Snapshot error:", e);
+        }
+    };
+
+    // Initial Fetch
+    fetchUpdate();
+
+    // Listen for live database changes
     const channel = supabase
-        .channel(`public:${q.path}-changes`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: q.path }, async () => {
-            const updatedSnapshot = await getDocs(q);
-            cb(updatedSnapshot);
+        .channel(`public:${q.path}-changes-${Math.random().toString(36).substring(7)}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: q.path }, () => {
+            fetchUpdate();
         })
         .subscribe();
+        
     return () => { supabase.removeChannel(channel); };
 };
 
