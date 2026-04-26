@@ -101,6 +101,7 @@ export const generateObligationPDF = async (data: StudentData): Promise<string> 
     orientation: 'landscape',
     unit: 'mm',
     format: 'legal',
+    compress: true
   });
 
   const pageWidth = doc.internal.pageSize.getWidth(); // 355.6 mm

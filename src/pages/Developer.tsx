@@ -585,44 +585,49 @@ export default function Developer() {
 
   const sendCompletionEmail = async (student: StudentProgress) => {
     try {
-      // Find the most recent record to get semester/AY/signature info
+      // 1. KILLED THE 405 BUG: Removed the rogue '/api/generate-pdf' fetch call
+
       const latestRecord = [...student.records].sort((a, b) => b.date.localeCompare(a.date))[0];
       const adminDoc = members.find(m => m.email === user?.email);
 
+      // Generate the PDF
       const pdfBase64 = await generateObligationPDF({
-  studentName: student.studentName,
-  studentNo: student.studentNo,
-  program: student.program,
-  section: student.section,
-  bracket: student.bracket || 'N/A',
-  totalVerifiedHours: student.verifiedHours,
-  semester: (latestRecord as any)?.semester || '1st Semester',
-  academicYear: (latestRecord as any)?.academicYear || `A.Y. ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
-  studentSignature: (latestRecord as any)?.studentSignature,
-  
-  // 1. Prioritize live Admin/Approver signature from your Account Settings
-  approverName: student.approval?.approverName || adminDoc?.displayName || 'Authorized Representative',
-  approverRole: student.approval?.approverRole || (adminDoc?.role === 'admin' ? 'OSA Admin' : 'OSA Staff'),
-  approverSignature: adminDoc?.signature || student.approval?.approverSignature,
-  
-  // 2. Filter and map records to include live Staff signatures
-  records: student.records.filter(r => r.status === 'verified').map(r => {
-    // Look up the staff member in the members list to get their current live signature
-    const liveStaff = members.find(m => m.id === (r as any).verifiedById);
-    
-    return {
-      date: r.date,
-      taskTitle: r.taskTitle,
-      staffName: (r as any).staffName || 'OSA Staff',
-      timeIn: formatTime(r.timeIn),
-      timeOut: formatTime(r.timeOut),
-      creditHours: r.creditHours,
-      // FIX: Use the live signature if found, otherwise fall back to the saved snapshot
-      verifierSignature: liveStaff?.signature || (r as any).verifierSignature,
-      studentSignature: (r as any).studentSignature
-    };
-  })
-});
+        studentName: student.studentName,
+        studentNo: student.studentNo,
+        program: student.program,
+        section: student.section,
+        bracket: student.bracket || 'N/A',
+        totalVerifiedHours: student.verifiedHours,
+        semester: (latestRecord as any)?.semester || '1st Semester',
+        academicYear: (latestRecord as any)?.academicYear || `A.Y. ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
+        studentSignature: (latestRecord as any)?.studentSignature,
+        approverName: student.approval?.approverName || adminDoc?.displayName || 'Authorized Representative',
+        approverRole: student.approval?.approverRole || (adminDoc?.role === 'admin' ? 'OSA Admin' : 'OSA Staff'),
+        approverSignature: adminDoc?.signature || student.approval?.approverSignature,
+        records: student.records.filter(r => r.status === 'verified').map(r => {
+          
+          // ADDED: Live signature lookup for the email attachment just like the preview
+          const liveStaff = members.find(m => m.id === (r as any).verifiedById);
+          
+          return {
+            date: r.date,
+            taskTitle: r.taskTitle,
+            staffName: (r as any).staffName || 'OSA Staff',
+            timeIn: formatTime(r.timeIn),
+            timeOut: formatTime(r.timeOut),
+            creditHours: r.creditHours,
+            verifierSignature: liveStaff?.signature || (r as any).verifierSignature || adminDoc?.signature,
+            studentSignature: (r as any).studentSignature
+          };
+        })
+      });
+
+      // 2. SAFETY LOCK: Check payload size to prevent 413 Vercel Server Crash
+      const payloadSizeMB = (pdfBase64.length * 0.75) / (1024 * 1024);
+      if (payloadSizeMB > 4.2) {
+          showAlert("Warning", `PDF is too large (${payloadSizeMB.toFixed(1)}MB) for the email server. Please generate the preview and email it manually.`, "warning");
+          return;
+      }
 
       const response = await fetch('/api/send-completion-form', {
         method: 'POST',
@@ -634,13 +639,22 @@ export default function Developer() {
         })
       });
 
+      // 3. KILLED THE JSON BUG: Handle server errors properly before trying to read JSON
+      if (!response.ok) {
+        if (response.status === 413) {
+            throw new Error("Payload Too Large: The PDF is too heavy to send via Vercel.");
+        }
+        const errText = await response.text();
+        throw new Error(`Server Error ${response.status}: ${errText}`);
+      }
+
       const result = await response.json();
       if (result.success) {
         showAlert("Sent", `Completion form successfully sent to ${student.studentEmail}!`, "success");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Email send failed", e);
-      showAlert("Error", "Failed to send completion email automatically.", "error");
+      showAlert("Error", e.message || "Failed to send completion email automatically.", "error");
     }
   };
 const handleApproveCompletion = async (student: StudentProgress) => {
