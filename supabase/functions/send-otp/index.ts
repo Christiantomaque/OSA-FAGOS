@@ -12,7 +12,7 @@ serve(async (req: Request) => {
 
   try {
     const { email, code } = await req.json()
-    const RESEND_API_KEY = "re_YOUR_KEY_HERE" // REPLACE THIS WITH YOUR ACTUAL KEY
+    const RESEND_API_KEY = "re_iSryvPKq_FmBYqP1ZgruJ8WeXzJmaNJVe" // REPLACE THIS WITH YOUR ACTUAL KEY
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
