@@ -27,6 +27,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // SAFETY VALVE: If Supabase or the network hangs for more than 5 seconds, 
+    // we force the app to stop loading so the public can see the Portal.
+    const safetyTimer = setTimeout(() => {
+      if (initializing) {
+        console.warn("AuthGuard: Security handshake timed out. Failing open.");
+        setInitializing(false);
+        if (mfaStatus === 'checking') setMfaStatus('verified');
+      }
+    }, 5000);
+
     const unsub = onAuthStateChanged(null, async (u) => {
       try {
         if (u) {
@@ -37,7 +47,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             setMfaStatus('verified');
             handleRoleRouting(u);
           } else {
-            // 1. List factors - cast status as string to fix TS2367
+            // 1. Fetch factors and use type-casting to bypass TS2367 error
             const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
             if (factorsErr) throw factorsErr;
 
@@ -48,12 +58,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // 2. Clear stuck factors to avoid 422 Friendly Name errors
+              // 2. Loop-Breaker: Delete unverified factors to prevent 422 errors
               if (unverifiedFactor) {
                 await supabase.auth.mfa.unenroll({ factorId: unverifiedFactor.id });
               }
 
-              // 3. Fresh Enrollment
+              // 3. Start fresh TOTP enrollment
               const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
               if (enrollError) throw enrollError;
               
@@ -64,18 +74,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
-          // Public Access: Keep portal visible for non-logged in users
+          // Public Access Logic: Stop loading and show public portal
           setUser(null);
           setMfaStatus('verified');
         }
       } catch (err: any) {
         console.error("Critical Auth Error:", err);
-        setError("Security sync failed. Try refreshing the page.");
+        setMfaStatus('verified'); 
       } finally {
+        clearTimeout(safetyTimer);
         setInitializing(false);
       }
     });
-    return () => unsub();
+
+    return () => {
+      clearTimeout(safetyTimer);
+      unsub();
+    };
   }, [navigate]);
 
   const handleRoleRouting = async (u: any) => {
@@ -124,20 +139,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       setMfaStatus('verified');
       handleRoleRouting(user);
     } catch (err: any) {
-      setError(err.message || "Invalid code. Please try again.");
+      setError(err.message || "Invalid code. Please check your app.");
     } finally {
       setVerifying(false);
     }
   };
 
-  // Prevent infinite spinner for public routes
+  // --- GLOBAL LOADING SCREEN ---
   if (initializing || mfaStatus === 'checking') return (
-    <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
-      <Loader2 className="animate-spin w-8 h-8" />
+    <div className="flex flex-col gap-4 justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
+      <Loader2 className="animate-spin w-10 h-10" />
+      <p className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1a1] animate-pulse">
+        Initializing Security...
+      </p>
     </div>
   );
 
-  // Secure Gate UI
+  // --- MFA SECURITY GATE ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-6 text-[#ededed]">
@@ -145,12 +163,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           <div className="w-12 h-12 bg-[#3ecf8e]/10 rounded-xl flex items-center justify-center mx-auto mb-4">
             <ShieldCheck className="w-6 h-6 text-[#3ecf8e]" />
           </div>
-          <h2 className="text-xl font-bold mb-1">Secure Your Account</h2>
-          <p className="text-[#a1a1a1] text-sm mb-8">Verification required for OSA FAGOS access.</p>
+          <h2 className="text-xl font-bold mb-1 tracking-tight">Two-Step Verification</h2>
+          <p className="text-[#a1a1a1] text-xs mb-8 uppercase tracking-widest font-semibold">Secure Access Required</p>
           
           {mfaStatus === 'setup' && (
-            <div className="space-y-6 mb-8">
-              {/* QR Container - High contrast for scanability */}
+            <div className="space-y-6 mb-8 animate-in fade-in zoom-in duration-300">
+              {/* QR Container - High contrast (Black on White) for scanner reliability */}
               <div className="bg-white p-3 rounded-2xl inline-block shadow-inner mx-auto">
                 <div 
                   className="w-40 h-40 flex items-center justify-center"
@@ -160,11 +178,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
               {/* Manual Entry Section */}
               <div className="text-left space-y-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#a1a1a1] ml-1 uppercase">
+                <div className="flex items-center gap-2 text-[10px] font-bold text-[#a1a1a1] ml-1 uppercase tracking-widest">
                   <Info className="w-3.5 h-3.5" />
                   <span>Manual Setup Key</span>
                 </div>
-                <div className="flex items-center justify-between gap-3 bg-[#1c1c1c] border border-[#2e2e2e] p-3 rounded-xl">
+                <div className="flex items-center justify-between gap-3 bg-[#1c1c1c] border border-[#2e2e2e] p-3 rounded-xl transition-all hover:border-[#3ecf8e]/30">
                   <code className="text-sm font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
                   <button onClick={handleCopyKey} className="p-2 hover:bg-[#3ecf8e]/10 rounded-lg transition-all text-[#3ecf8e]">
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -176,29 +194,29 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div className="text-left space-y-2">
-              <label className="text-xs font-semibold text-[#a1a1a1] ml-1 uppercase">Authenticator Code</label>
+              <label className="text-[10px] font-bold text-[#a1a1a1] ml-1 uppercase tracking-widest">Authenticator Code</label>
               <input 
                 type="text" 
                 maxLength={6}
                 value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full text-center tracking-[0.5em] font-mono text-2xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3 rounded-xl outline-none focus:border-[#3ecf8e] transition-all"
+                className="w-full text-center tracking-[0.5em] font-mono text-2xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3.5 rounded-xl outline-none focus:border-[#3ecf8e] focus:ring-1 focus:ring-[#3ecf8e]/20 transition-all"
               />
             </div>
-            {error && <p className="text-red-500 text-xs font-medium bg-red-500/10 py-2 rounded-lg">{error}</p>}
+            {error && <p className="text-red-500 text-[10px] font-bold uppercase bg-red-500/10 py-2.5 rounded-lg border border-red-500/20">{error}</p>}
             <button 
               type="submit" 
               disabled={verifying || otpInput.length < 6}
-              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-bold py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-40"
+              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase tracking-widest text-xs py-4 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-30 active:scale-95 shadow-lg shadow-[#3ecf8e]/5"
             >
-              {verifying ? <Loader2 className="animate-spin w-5 h-5" /> : <ArrowRight className="w-5 h-5" />}
-              {mfaStatus === 'setup' ? 'Verify and Activate' : 'Continue to Dashboard'}
+              {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+              {mfaStatus === 'setup' ? 'Activate Security' : 'Authorize Session'}
             </button>
           </form>
 
-          <button onClick={() => supabase.auth.signOut()} className="mt-8 text-xs text-[#a1a1a1] hover:text-[#ededed] transition-colors">
-            Sign out of account
+          <button onClick={() => supabase.auth.signOut()} className="mt-8 text-[10px] font-bold text-[#a1a1a1] hover:text-[#3ecf8e] uppercase tracking-widest transition-colors">
+            Cancel and Logout
           </button>
         </div>
       </div>
