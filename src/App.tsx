@@ -23,19 +23,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const isProcessing = useRef(false);
+  const isSyncing = useRef(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(null, async (u) => {
-      if (isProcessing.current) return;
-      isProcessing.current = true;
+      if (isSyncing.current) return;
+      isSyncing.current = true;
 
       try {
         if (u) {
           setUser(u);
           
-          // 1. "REMEMBER ME" LOGIC: Bypass MFA if verified in the last 30 days
+          // 1. THE 30-DAY TRUST LOGIC
           const trustKey = `mfa_trust_${u.uid}`;
           const trustExpiry = localStorage.getItem(trustKey);
           const isTrusted = trustExpiry && Date.now() < parseInt(trustExpiry);
@@ -44,9 +44,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           if (aalErr) throw aalErr;
 
           if (aalData?.currentLevel === 'aal2' || isTrusted) {
+            // ALREADY SECURE: Skip gate and handle routing
             setMfaStatus('verified');
-            handleRoleRouting(u);
+            await handleRoleRouting(u);
           } else {
+            // NEED SECURITY: Check factors
             const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
             if (factorsErr) throw factorsErr;
 
@@ -56,16 +58,17 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // 2. THE 422 FIX: Nuke existing factors to prevent friendly-name conflict
+              // THE 422 CLEANUP: Nuke existing unverified factors
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
                 }
               }
 
+              // FRESH ENROLLMENT
               const { data: enrollData, error: enrollErr } = await supabase.auth.mfa.enroll({ 
                 factorType: 'totp',
-                friendlyName: 'OSA FAGOS Device' 
+                friendlyName: 'OSA FAGOS Authenticator' 
               });
               if (enrollErr) throw enrollErr;
               
@@ -76,11 +79,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
+          // PUBLIC VIEWING
           setUser(null);
           setMfaStatus('verified');
         }
       } catch (err: any) {
-        // GHOST JWT RECOVERY
+        console.error("Auth Guard Loop Detected:", err.message);
+        // Fix 403 Sub Claim
         if (err.message.includes("sub claim") || err.status === 403) {
           await supabase.auth.signOut();
           localStorage.clear();
@@ -90,33 +95,31 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         setMfaStatus('verified');
       } finally {
         setInitializing(false);
-        isProcessing.current = false;
+        isSyncing.current = false;
       }
     });
     return () => unsub();
   }, [navigate]);
 
   const handleRoleRouting = async (u: User) => {
-    if (window.location.pathname === '/login') {
-      const userDoc = await getDoc(doc(db, 'admins', u.uid));
-      let role = userDoc.exists() ? userDoc.data().role : 'staff';
-      
-      if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
-        role = 'developer';
-        await setDoc(doc(db, 'admins', u.uid), {
-          email: u.email, displayName: u.displayName || 'User', role, lastLogin: serverTimestamp()
-        }, { merge: true });
-      }
-
-      const routes: Record<string, string> = { developer: '/developer', admin: '/admin', student_assistant: '/student-assistant' };
-      navigate(routes[role] || '/staff');
+    // FORCE ROUTING: This solves the "stuck on login page" issue
+    const userDoc = await getDoc(doc(db, 'admins', u.uid));
+    let role = userDoc.exists() ? userDoc.data().role : 'staff';
+    
+    if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
+      role = 'developer';
+      await setDoc(doc(db, 'admins', u.uid), {
+        email: u.email, displayName: u.displayName || 'User', role, lastLogin: serverTimestamp()
+      });
     }
-  };
 
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(secretKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const routes: Record<string, string> = { developer: '/developer', admin: '/admin', student_assistant: '/student-assistant' };
+    const targetPath = routes[role] || '/staff';
+    
+    // Only navigate if we are currently at the login gate
+    if (window.location.pathname === '/login') {
+      navigate(targetPath, { replace: true });
+    }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -133,14 +136,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       });
       if (verErr) throw verErr;
 
-      // SUCCESS: Set 30-day Trust device token
+      // SUCCESS: Set the 30-day trust token
       if (user) {
         const thirtyDays = Date.now() + (30 * 24 * 60 * 60 * 1000);
         localStorage.setItem(`mfa_trust_${user.uid}`, thirtyDays.toString());
       }
 
       setMfaStatus('verified');
-      handleRoleRouting(user!);
+      await handleRoleRouting(user!);
     } catch (err: any) {
       setError("Invalid code. Check your app.");
     } finally {
@@ -154,28 +157,26 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // --- ULTRA-COMPACT SECURITY GATE UI ---
+  // --- ULTRA-COMPACT SECURITY UI ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
-        <div className="bg-[#171717] border border-[#2e2e2e] max-w-[340px] w-full p-6 rounded-xl text-center shadow-2xl">
+        <div className="bg-[#171717] border border-[#2e2e2e] max-w-[340px] w-full p-6 rounded-2xl text-center shadow-2xl">
           <ShieldCheck className="w-8 h-8 text-[#3ecf8e] mx-auto mb-3" />
           <h2 className="text-lg font-bold mb-0.5 tracking-tight text-[#ededed]">System Security</h2>
-          <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-[0.2em] font-bold">Two-Step Verification</p>
+          <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-widest font-bold">Two-Step Verification</p>
           
           {mfaStatus === 'setup' && (
             <div className="space-y-4 mb-6">
               <div className="bg-white p-2 rounded-lg inline-block mx-auto">
-                {/* DATA URL FIX */}
                 <img src={qrCode} alt="QR" className="w-32 h-32 object-contain" />
               </div>
-
-              <div className="text-left space-y-1">
-                <span className="text-[9px] font-bold text-[#666] ml-1 uppercase">Manual Key</span>
-                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg transition-all hover:border-[#3ecf8e]/30">
-                  <code className="text-[11px] font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
-                  <button onClick={handleCopyKey} className="ml-2 text-[#3ecf8e] hover:text-[#34b27b]">
-                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              <div className="text-left space-y-1.5 px-1">
+                <span className="text-[9px] font-bold text-[#555] ml-1 uppercase">Manual Key</span>
+                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-xl">
+                  <code className="text-[10px] font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
+                  <button onClick={() => { navigator.clipboard.writeText(secretKey); setCopied(true); setTimeout(()=>setCopied(false), 2000); }} className="ml-2 text-[#3ecf8e]">
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
@@ -183,31 +184,31 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           )}
           
           <form onSubmit={handleVerifyOtp} className="space-y-3 px-1">
-            <div className="text-left space-y-1">
-              <label className="text-[9px] font-bold text-[#666] ml-1 uppercase">Authenticator Code</label>
+            <div className="text-left space-y-1.5">
+              <label className="text-[9px] font-bold text-[#555] ml-1 uppercase tracking-widest">Authenticator Code</label>
               <input 
                 type="text" maxLength={6} value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full text-center tracking-[0.4em] font-mono text-xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-2.5 rounded-lg outline-none focus:border-[#3ecf8e] transition-all"
+                className="w-full text-center tracking-[0.4em] font-mono text-xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-2.5 rounded-xl outline-none focus:border-[#3ecf8e]"
               />
             </div>
             {error && (
               <div className="flex items-center gap-2 text-red-500 text-[10px] font-bold bg-red-500/10 p-2 rounded-lg border border-red-500/20">
-                <AlertCircle className="w-3 h-3" />
+                <AlertCircle className="w-3 h-3 flex-shrink-0" />
                 <span className="truncate">{error}</span>
               </div>
             )}
             <button 
               type="submit" disabled={verifying || otpInput.length < 6}
-              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase text-[10px] py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]"
+              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase text-[10px] py-3.5 rounded-xl transition-all flex justify-center items-center gap-2 active:scale-95 disabled:opacity-30"
             >
               {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
               Authorize Session
             </button>
           </form>
 
-          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#555] hover:text-[#ededed] transition-colors uppercase font-bold tracking-tighter">
+          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#555] hover:text-[#ededed] transition-colors uppercase font-bold tracking-widest">
             Sign out of account
           </button>
         </div>
