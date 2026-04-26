@@ -82,7 +82,6 @@ export const getDocs = async (q: any) => {
             }
         }
     }
-    // Fixed destructuring to prevent TS2339 error
     const { data: res, error: err } = await req;
     if (err) throw err;
 

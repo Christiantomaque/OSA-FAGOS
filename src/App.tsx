@@ -35,7 +35,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         if (u) {
           setUser(u);
           
-          // 1. 30-Day Trust Bypass Check
+          // 1. "REMEMBER ME" LOGIC: Bypass MFA if verified in the last 30 days
           const trustKey = `mfa_trust_${u.uid}`;
           const trustExpiry = localStorage.getItem(trustKey);
           const isTrusted = trustExpiry && Date.now() < parseInt(trustExpiry);
@@ -47,7 +47,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             setMfaStatus('verified');
             handleRoleRouting(u);
           } else {
-            // 2. Fetch factors using correct .mfa namespace
             const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
             if (factorsErr) throw factorsErr;
 
@@ -57,7 +56,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // 3. THE 422 FIX: Nuclear cleanup of old factors
+              // 2. THE 422 FIX: Nuke existing factors to prevent friendly-name conflict
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
@@ -155,24 +154,25 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // --- ULTRA-COMPACT SECURITY GATE ---
+  // --- ULTRA-COMPACT SECURITY GATE UI ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
         <div className="bg-[#171717] border border-[#2e2e2e] max-w-[340px] w-full p-6 rounded-xl text-center shadow-2xl">
           <ShieldCheck className="w-8 h-8 text-[#3ecf8e] mx-auto mb-3" />
           <h2 className="text-lg font-bold mb-0.5 tracking-tight text-[#ededed]">System Security</h2>
-          <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-widest font-bold">Two-Step Verification</p>
+          <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-[0.2em] font-bold">Two-Step Verification</p>
           
           {mfaStatus === 'setup' && (
             <div className="space-y-4 mb-6">
               <div className="bg-white p-2 rounded-lg inline-block mx-auto">
+                {/* DATA URL FIX */}
                 <img src={qrCode} alt="QR" className="w-32 h-32 object-contain" />
               </div>
 
               <div className="text-left space-y-1">
                 <span className="text-[9px] font-bold text-[#666] ml-1 uppercase">Manual Key</span>
-                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg">
+                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg transition-all hover:border-[#3ecf8e]/30">
                   <code className="text-[11px] font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
                   <button onClick={handleCopyKey} className="ml-2 text-[#3ecf8e] hover:text-[#34b27b]">
                     {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -182,14 +182,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             </div>
           )}
           
-          <form onSubmit={handleVerifyOtp} className="space-y-3">
+          <form onSubmit={handleVerifyOtp} className="space-y-3 px-1">
             <div className="text-left space-y-1">
               <label className="text-[9px] font-bold text-[#666] ml-1 uppercase">Authenticator Code</label>
               <input 
                 type="text" maxLength={6} value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full text-center tracking-[0.4em] font-mono text-xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-2.5 rounded-lg outline-none focus:border-[#3ecf8e]"
+                className="w-full text-center tracking-[0.4em] font-mono text-xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-2.5 rounded-lg outline-none focus:border-[#3ecf8e] transition-all"
               />
             </div>
             {error && (
@@ -200,7 +200,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             )}
             <button 
               type="submit" disabled={verifying || otpInput.length < 6}
-              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase text-[10px] py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-40"
+              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase text-[10px] py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]"
             >
               {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
               Authorize Session
