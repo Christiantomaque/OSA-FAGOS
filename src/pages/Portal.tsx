@@ -9,7 +9,7 @@ import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
 // --- Image Placeholders ---
-const cdmLogo = '/logo/images/cdmlogo.png';
+import cdmLogo = '/logo/images/cdmlogo.png';
 const osaLogo = '/logo/images/osalogo.png';
 
 // --- Types ---
