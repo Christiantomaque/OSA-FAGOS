@@ -40,22 +40,20 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
           // 3. Global Redirect based on role
           // This clears the messy URL codes automatically after login
-          if (window.location.pathname === '/login' || window.location.pathname === '/') {
-             if (role === 'developer') navigate('/developer');
-             else if (role === 'admin') navigate('/admin');
-             else if (role === 'student_assistant') navigate('/student-assistant');
-             else navigate('/staff');
-          }
-
-        } catch (error) {
-          console.error("Global Auth Error:", error);
+          if (window.location.pathname === '/login') {
+           if (role === 'developer') navigate('/developer');
+           else if (role === 'admin') navigate('/admin');
+           else if (role === 'student_assistant') navigate('/student-assistant');
+           else navigate('/staff');
         }
+      } catch (error) {
+        console.error("Global Auth Error:", error);
       }
-      setInitializing(false);
-    });
-
-    return () => unsub();
-  }, [navigate]);
+    }
+    setInitializing(false);
+  });
+  return () => unsub();
+}, [navigate]);
 
   if (initializing) {
     return (
