@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase, sendVerificationCode } from './lib/supabase';
+// Notice: sendVerificationCode is removed because we don't need emails anymore!
+import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase } from './lib/supabase';
 import Portal from './pages/Portal';
 import Admin from './pages/Admin';
 import Staff from './pages/Staff';
@@ -8,26 +9,19 @@ import StudentAssistant from './pages/StudentAssistant';
 import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
-import { Loader2, ShieldCheck, Mail, ArrowRight } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowRight } from 'lucide-react';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<any>(null);
-  const [isMfaVerified, setIsMfaVerified] = useState(false);
+  
+  // New MFA States for Authenticator App
+  const [mfaStatus, setMfaStatus] = useState<'checking' | 'setup' | 'verify' | 'verified'>('checking');
+  const [qrCode, setQrCode] = useState('');
+  const [factorId, setFactorId] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  
-  // Handles the countdown timer for the resend button
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (resendCooldown > 0) {
-      timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [resendCooldown]);// Tracks if email was dispatched
   
   const navigate = useNavigate();
 
@@ -35,58 +29,72 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const unsub = onAuthStateChanged(null, async (u) => {
       if (u) {
         setUser(u);
-        // 1. Check for 7-day Trust Token
-        const trustToken = localStorage.getItem(`fagos_trust_${u.uid}`);
-        if (trustToken) {
-          const { expiry } = JSON.parse(trustToken);
-          if (new Date().getTime() < expiry) {
-            setIsMfaVerified(true);
-          }
-        }
         
-        // 2. Fetch/Create Role Profile
         try {
-          const userDoc = await getDoc(doc(db, 'admins', u.uid));
-          let role = userDoc.exists() ? userDoc.data().role : 'staff';
+          // 1. Check Authenticator Assurance Level (AAL)
+          const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          
+          if (aalData?.currentLevel === 'aal2') {
+            // User has completed Two-Step Verification this session
+            setMfaStatus('verified');
+            handleRoleRouting(u);
+          } else {
+            // User is aal1 (Logged in, but MFA not verified yet)
+            const { data: factorsData } = await supabase.auth.mfa.listFactors();
+            const totpFactor = factorsData?.totp?.[0];
 
-          if (!userDoc.exists()) {
-            role = u.email === 'christiantomaque18@gmail.com' ? 'developer' : 'staff';
-            await setDoc(doc(db, 'admins', u.uid), {
-              email: u.email,
-              displayName: u.displayName || 'User',
-              role: role,
-              lastLogin: serverTimestamp()
-            }, { merge: true });
-          }
-
-          // 3. Handle Auto-Redirects if already verified
-          if (isMfaVerified && window.location.pathname === '/login') {
-            const routes: Record<string, string> = { developer: '/developer', admin: '/admin', student_assistant: '/student-assistant' };
-            navigate(routes[role] || '/staff');
+            if (totpFactor && totpFactor.status === 'verified') {
+              // They already set up an app before, just ask for the 6-digit code
+              setFactorId(totpFactor.id);
+              setMfaStatus('verify');
+            } else {
+              // First time login! Generate a QR code for them to scan
+              const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+              if (enrollError) throw enrollError;
+              
+              setFactorId(enrollData.id);
+              setQrCode(enrollData.totp.qr_code); // Supabase gives us the raw SVG
+              setMfaStatus('setup');
+            }
           }
         } catch (err) {
-          console.error("Auth Error:", err);
+          console.error("Auth/MFA Error:", err);
         }
+      } else {
+        setMfaStatus('checking');
       }
       setInitializing(false);
     });
     return () => unsub();
-  }, [navigate, isMfaVerified]);
+  }, [navigate]);
 
-  // --- THE DISPATCHER: Automatically fires the email when the gate is triggered ---
-  useEffect(() => {
-    if (user && !isMfaVerified && !codeSent && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
-      sendVerificationCode(user.email)
-        .then(() => {
-          setCodeSent(true);
-          console.log("OTP Email Dispatched Successfully!");
-        })
-        .catch(err => {
-          console.error("Failed to send OTP:", err);
-          setError("Failed to send verification email. Please try clicking 'Resend Code'.");
-        });
+  const handleRoleRouting = async (u: any) => {
+    if (window.location.pathname === '/login') {
+      const userDoc = await getDoc(doc(db, 'admins', u.uid));
+      let role = userDoc.exists() ? userDoc.data().role : 'staff';
+      
+      // Developer override for initial setup
+      if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
+        role = 'developer';
+        await setDoc(doc(db, 'admins', u.uid), {
+          email: u.email,
+          displayName: u.displayName || 'User',
+          role: role,
+          lastLogin: serverTimestamp()
+        }, { merge: true });
+      } else if (!userDoc.exists()) {
+        await setDoc(doc(db, 'admins', u.uid), {
+          email: u.email,
+          displayName: u.displayName || 'User',
+          role: role,
+          lastLogin: serverTimestamp()
+        }, { merge: true });
+      }
+
+      const routes: Record<string, string> = { developer: '/developer', admin: '/admin', student_assistant: '/student-assistant' };
+      navigate(routes[role] || '/staff');
     }
-  }, [user, isMfaVerified, codeSent]);
+  };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,46 +102,55 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     setError('');
 
     try {
-      // Check the code against your 'otp_verification' table
-      const { data, error: dbError } = await supabase
-        .from('otp_verification')
-        .select('*')
-        .eq('email', user.email)
-        .eq('code', otpInput)
-        .gt('expires_at', new Date().toISOString())
-        .maybeSingle();
+      // Create a challenge, then verify the code against it
+      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+      if (challengeError) throw challengeError;
 
-      if (data) {
-        // Success: Set 7-day Trust Token
-        const expiry = new Date().getTime() + (7 * 24 * 60 * 60 * 1000);
-        localStorage.setItem(`fagos_trust_${user.uid}`, JSON.stringify({ verified: true, expiry }));
-        setIsMfaVerified(true);
-      } else {
-        setError("Invalid or expired code. Please check your email.");
-      }
-    } catch (err) {
-      setError("Verification failed. Try again.");
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challengeData.id,
+        code: otpInput
+      });
+
+      if (verifyError) throw verifyError;
+
+      // Success! They are now AAL2 verified.
+      setMfaStatus('verified');
+      handleRoleRouting(user);
+    } catch (err: any) {
+      setError(err.message || "Invalid code. Please try again.");
     } finally {
       setVerifying(false);
     }
   };
 
-  if (initializing) return (
+  if (initializing || mfaStatus === 'checking') return (
     <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
       <Loader2 className="animate-spin w-8 h-8" />
     </div>
   );
 
-  // --- THE GATE: If logged in but NOT verified, show the OTP UI instead of the app ---
-  if (user && !isMfaVerified && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
+  // --- THE GATE: If user needs to Setup OR Verify ---
+  if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-6 text-[#ededed]">
         <div className="bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-8 rounded-2xl text-center shadow-xl">
           <div className="w-16 h-16 bg-[#3ecf8e]/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <ShieldCheck className="w-8 h-8 text-[#3ecf8e]" />
           </div>
-          <h2 className="text-xl font-bold mb-2">Two-Step Verification</h2>
-          <p className="text-[#a1a1a1] text-sm mb-6">We sent a 6-digit code to <br/><span className="text-[#ededed] font-medium">{user.email}</span></p>
+          <h2 className="text-xl font-bold mb-2">Authenticator App</h2>
+          
+          {mfaStatus === 'setup' ? (
+            <>
+              <p className="text-[#a1a1a1] text-sm mb-4">Scan this QR code with Google Authenticator or Authy to secure your account.</p>
+              <div 
+                className="bg-white p-2 rounded-xl inline-block mb-6"
+                dangerouslySetInnerHTML={{ __html: qrCode }} 
+              />
+            </>
+          ) : (
+            <p className="text-[#a1a1a1] text-sm mb-6">Enter the 6-digit code from your authenticator app.</p>
+          )}
           
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <input 
@@ -151,26 +168,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-bold py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-50"
             >
               {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-              Verify Device
+              {mfaStatus === 'setup' ? 'Activate Security' : 'Verify Device'}
             </button>
           </form>
-
-          {/* FALLBACK: Resend Code Button */}
-          <button 
-            type="button"
-            disabled={resendCooldown > 0}
-            onClick={() => {
-              setError('');
-              setResendCooldown(60); // Start 60 second cooldown
-              sendVerificationCode(user.email)
-                .then(() => console.log("Code resent!"))
-                .catch(() => setError("Failed to resend code."));
-            }}
-            className="mt-5 text-sm text-[#3ecf8e] hover:text-[#34b27b] disabled:text-[#555] disabled:hover:text-[#555] underline block mx-auto transition-colors"
-          >
-            {resendCooldown > 0 ? `Resend Code in ${resendCooldown}s` : "Resend Code"}
-          </button>
-
           <button onClick={() => supabase.auth.signOut()} className="mt-6 text-xs text-[#a1a1a1] hover:text-[#ededed] underline">Sign out of account</button>
         </div>
       </div>
