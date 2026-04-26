@@ -35,7 +35,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         if (u) {
           setUser(u);
           
-          // FIX 1: Use u.uid instead of u.id to match the 'User' type
+          // 1. 30-Day Trust Bypass Check
           const trustKey = `mfa_trust_${u.uid}`;
           const trustExpiry = localStorage.getItem(trustKey);
           const isTrusted = trustExpiry && Date.now() < parseInt(trustExpiry);
@@ -47,7 +47,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             setMfaStatus('verified');
             handleRoleRouting(u);
           } else {
-            // FIX 2: Correct path is supabase.auth.mfa.listFactors()
+            // 2. Fetch factors using correct .mfa namespace
             const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
             if (factorsErr) throw factorsErr;
 
@@ -57,7 +57,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // Nuke stuck factors to clear 422 errors
+              // 3. THE 422 FIX: Nuclear cleanup of old factors
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
@@ -66,7 +66,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
               const { data: enrollData, error: enrollErr } = await supabase.auth.mfa.enroll({ 
                 factorType: 'totp',
-                friendlyName: 'OSA FAGOS Authenticator' 
+                friendlyName: 'OSA FAGOS Device' 
               });
               if (enrollErr) throw enrollErr;
               
@@ -81,7 +81,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           setMfaStatus('verified');
         }
       } catch (err: any) {
-        // Ghost session self-healing logic
+        // GHOST JWT RECOVERY
         if (err.message.includes("sub claim") || err.status === 403) {
           await supabase.auth.signOut();
           localStorage.clear();
@@ -102,8 +102,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const userDoc = await getDoc(doc(db, 'admins', u.uid));
       let role = userDoc.exists() ? userDoc.data().role : 'staff';
       
-      if (!userDoc.exists()) {
-        role = u.email === 'christiantomaque18@gmail.com' ? 'developer' : 'staff';
+      if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
+        role = 'developer';
         await setDoc(doc(db, 'admins', u.uid), {
           email: u.email, displayName: u.displayName || 'User', role, lastLogin: serverTimestamp()
         }, { merge: true });
@@ -134,7 +134,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       });
       if (verErr) throw verErr;
 
-      // Set 30-day trust
+      // SUCCESS: Set 30-day Trust device token
       if (user) {
         const thirtyDays = Date.now() + (30 * 24 * 60 * 60 * 1000);
         localStorage.setItem(`mfa_trust_${user.uid}`, thirtyDays.toString());
@@ -150,34 +150,31 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   };
 
   if (initializing || mfaStatus === 'checking') return (
-    <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
-      <Loader2 className="animate-spin w-6 h-6" />
+    <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center">
+      <Loader2 className="animate-spin text-[#3ecf8e] w-6 h-6" />
     </div>
   );
 
+  // --- ULTRA-COMPACT SECURITY GATE ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
         <div className="bg-[#171717] border border-[#2e2e2e] max-w-[340px] w-full p-6 rounded-xl text-center shadow-2xl">
           <ShieldCheck className="w-8 h-8 text-[#3ecf8e] mx-auto mb-3" />
-          <h2 className="text-lg font-bold mb-1 tracking-tight">System Security</h2>
-          <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-widest font-semibold">Two-Step Verification</p>
+          <h2 className="text-lg font-bold mb-0.5 tracking-tight text-[#ededed]">System Security</h2>
+          <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-widest font-bold">Two-Step Verification</p>
           
           {mfaStatus === 'setup' && (
             <div className="space-y-4 mb-6">
               <div className="bg-white p-2 rounded-lg inline-block mx-auto">
-                {qrCode.startsWith('data:image') ? (
-                  <img src={qrCode} alt="QR" className="w-32 h-32 object-contain" />
-                ) : (
-                  <div className="w-32 h-32 flex items-center justify-center" dangerouslySetInnerHTML={{ __html: qrCode }} />
-                )}
+                <img src={qrCode} alt="QR" className="w-32 h-32 object-contain" />
               </div>
 
               <div className="text-left space-y-1">
-                <span className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">Manual Key</span>
+                <span className="text-[9px] font-bold text-[#666] ml-1 uppercase">Manual Key</span>
                 <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg">
                   <code className="text-[11px] font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
-                  <button onClick={handleCopyKey} className="ml-2 text-[#3ecf8e]">
+                  <button onClick={handleCopyKey} className="ml-2 text-[#3ecf8e] hover:text-[#34b27b]">
                     {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                   </button>
                 </div>
@@ -187,7 +184,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           
           <form onSubmit={handleVerifyOtp} className="space-y-3">
             <div className="text-left space-y-1">
-              <label className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">Authenticator Code</label>
+              <label className="text-[9px] font-bold text-[#666] ml-1 uppercase">Authenticator Code</label>
               <input 
                 type="text" maxLength={6} value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
@@ -198,7 +195,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             {error && (
               <div className="flex items-center gap-2 text-red-500 text-[10px] font-bold bg-red-500/10 p-2 rounded-lg border border-red-500/20">
                 <AlertCircle className="w-3 h-3" />
-                {error}
+                <span className="truncate">{error}</span>
               </div>
             )}
             <button 
@@ -206,11 +203,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase text-[10px] py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-40"
             >
               {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-              Authorize
+              Authorize Session
             </button>
           </form>
 
-          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#666] hover:text-[#ededed] transition-colors uppercase font-bold">
+          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#555] hover:text-[#ededed] transition-colors uppercase font-bold tracking-tighter">
             Sign out of account
           </button>
         </div>
