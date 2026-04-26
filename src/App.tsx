@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase } from './lib/supabase';
+import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase, sendVerificationCode } from './lib/supabase';
 import Portal from './pages/Portal';
 import Admin from './pages/Admin';
 import Staff from './pages/Staff';
@@ -17,6 +17,17 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [otpInput, setOtpInput] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  
+  // Handles the countdown timer for the resend button
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);// Tracks if email was dispatched
   
   const navigate = useNavigate();
 
@@ -61,6 +72,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     });
     return () => unsub();
   }, [navigate, isMfaVerified]);
+
+  // --- THE DISPATCHER: Automatically fires the email when the gate is triggered ---
+  useEffect(() => {
+    if (user && !isMfaVerified && !codeSent && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
+      sendVerificationCode(user.email)
+        .then(() => {
+          setCodeSent(true);
+          console.log("OTP Email Dispatched Successfully!");
+        })
+        .catch(err => {
+          console.error("Failed to send OTP:", err);
+          setError("Failed to send verification email. Please try clicking 'Resend Code'.");
+        });
+    }
+  }, [user, isMfaVerified, codeSent]);
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +154,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               Verify Device
             </button>
           </form>
+
+          {/* FALLBACK: Resend Code Button */}
+          <button 
+            type="button"
+            disabled={resendCooldown > 0}
+            onClick={() => {
+              setError('');
+              setResendCooldown(60); // Start 60 second cooldown
+              sendVerificationCode(user.email)
+                .then(() => console.log("Code resent!"))
+                .catch(() => setError("Failed to resend code."));
+            }}
+            className="mt-5 text-sm text-[#3ecf8e] hover:text-[#34b27b] disabled:text-[#555] disabled:hover:text-[#555] underline block mx-auto transition-colors"
+          >
+            {resendCooldown > 0 ? `Resend Code in ${resendCooldown}s` : "Resend Code"}
+          </button>
+
           <button onClick={() => supabase.auth.signOut()} className="mt-6 text-xs text-[#a1a1a1] hover:text-[#ededed] underline">Sign out of account</button>
         </div>
       </div>

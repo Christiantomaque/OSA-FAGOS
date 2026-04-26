@@ -24,8 +24,9 @@ export const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.origin + '/',
-            // @ts-ignore - Supresses the outdated dictionary error
+            // FIXED: Route them to /login so the Two-Step Verification gate catches them immediately
+            redirectTo: window.location.origin + '/login',
+            // @ts-ignore
             flowType: 'pkce' 
         }
     });
