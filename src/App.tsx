@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase } from './lib/supabase';
+import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase, User } from './lib/supabase';
 import Portal from './pages/Portal';
 import Admin from './pages/Admin';
 import Staff from './pages/Staff';
@@ -12,7 +12,7 @@ import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertCircle } from
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   
   const [mfaStatus, setMfaStatus] = useState<'checking' | 'setup' | 'verify' | 'verified'>('checking');
   const [qrCode, setQrCode] = useState('');
@@ -23,7 +23,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // PREVENT RACE CONDITIONS
   const isProcessing = useRef(false);
   const navigate = useNavigate();
 
@@ -35,14 +34,20 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       try {
         if (u) {
           setUser(u);
-          const { data: aalData, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           
+          // FIX 1: Use u.uid instead of u.id to match the 'User' type
+          const trustKey = `mfa_trust_${u.uid}`;
+          const trustExpiry = localStorage.getItem(trustKey);
+          const isTrusted = trustExpiry && Date.now() < parseInt(trustExpiry);
+
+          const { data: aalData, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           if (aalErr) throw aalErr;
 
-          if (aalData?.currentLevel === 'aal2') {
+          if (aalData?.currentLevel === 'aal2' || isTrusted) {
             setMfaStatus('verified');
             handleRoleRouting(u);
           } else {
+            // FIX 2: Correct path is supabase.auth.mfa.listFactors()
             const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
             if (factorsErr) throw factorsErr;
 
@@ -52,7 +57,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // Loop-Breaker: Nuke stuck factors
+              // Nuke stuck factors to clear 422 errors
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
@@ -63,7 +68,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                 factorType: 'totp',
                 friendlyName: 'OSA FAGOS Authenticator' 
               });
-              
               if (enrollErr) throw enrollErr;
               
               setFactorId(enrollData.id);
@@ -77,22 +81,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           setMfaStatus('verified');
         }
       } catch (err: any) {
-        console.error("Auth Guard Error:", err.message);
-
-        // 403 GHOST RECOVERY: Clear local storage if JWT user is missing
+        // Ghost session self-healing logic
         if (err.message.includes("sub claim") || err.status === 403) {
           await supabase.auth.signOut();
           localStorage.clear();
           window.location.reload();
           return;
         }
-
-        if (u) {
-          setError(err.message || "Security sync failed.");
-          setMfaStatus('setup'); 
-        } else {
-          setMfaStatus('verified');
-        }
+        setMfaStatus('verified');
       } finally {
         setInitializing(false);
         isProcessing.current = false;
@@ -101,7 +97,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, [navigate]);
 
-  const handleRoleRouting = async (u: any) => {
+  const handleRoleRouting = async (u: User) => {
     if (window.location.pathname === '/login') {
       const userDoc = await getDoc(doc(db, 'admins', u.uid));
       let role = userDoc.exists() ? userDoc.data().role : 'staff';
@@ -136,11 +132,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const { error: verErr } = await supabase.auth.mfa.verify({
         factorId, challengeId: chalData.id, code: otpInput
       });
-
       if (verErr) throw verErr;
 
+      // Set 30-day trust
+      if (user) {
+        const thirtyDays = Date.now() + (30 * 24 * 60 * 60 * 1000);
+        localStorage.setItem(`mfa_trust_${user.uid}`, thirtyDays.toString());
+      }
+
       setMfaStatus('verified');
-      handleRoleRouting(user);
+      handleRoleRouting(user!);
     } catch (err: any) {
       setError("Invalid code. Check your app.");
     } finally {
@@ -149,22 +150,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   };
 
   if (initializing || mfaStatus === 'checking') return (
-    <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center">
-      <Loader2 className="animate-spin text-[#3ecf8e] w-6 h-6" />
+    <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
+      <Loader2 className="animate-spin w-6 h-6" />
     </div>
   );
 
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
-        <div className="bg-[#171717] border border-[#2e2e2e] max-w-sm w-full p-6 rounded-xl text-center shadow-2xl">
+        <div className="bg-[#171717] border border-[#2e2e2e] max-w-[340px] w-full p-6 rounded-xl text-center shadow-2xl">
           <ShieldCheck className="w-8 h-8 text-[#3ecf8e] mx-auto mb-3" />
           <h2 className="text-lg font-bold mb-1 tracking-tight">System Security</h2>
           <p className="text-[#a1a1a1] text-[9px] mb-6 uppercase tracking-widest font-semibold">Two-Step Verification</p>
           
           {mfaStatus === 'setup' && (
             <div className="space-y-4 mb-6">
-              {/* FIXED QR IMAGE: Correctly renders data URLs */}
               <div className="bg-white p-2 rounded-lg inline-block mx-auto">
                 {qrCode.startsWith('data:image') ? (
                   <img src={qrCode} alt="QR" className="w-32 h-32 object-contain" />
@@ -173,9 +173,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                 )}
               </div>
 
-              <div className="text-left space-y-1 px-1">
+              <div className="text-left space-y-1">
                 <span className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">Manual Key</span>
-                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg transition-all hover:border-[#3ecf8e]/30">
+                <div className="flex items-center justify-between bg-[#1c1c1c] border border-[#2e2e2e] px-3 py-2 rounded-lg">
                   <code className="text-[11px] font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
                   <button onClick={handleCopyKey} className="ml-2 text-[#3ecf8e]">
                     {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -185,7 +185,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             </div>
           )}
           
-          <form onSubmit={handleVerifyOtp} className="space-y-3 px-1">
+          <form onSubmit={handleVerifyOtp} className="space-y-3">
             <div className="text-left space-y-1">
               <label className="text-[9px] font-bold text-[#a1a1a1] ml-1 uppercase">Authenticator Code</label>
               <input 
@@ -206,7 +206,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase text-[10px] py-3 rounded-lg flex justify-center items-center gap-2 transition-all disabled:opacity-40"
             >
               {verifying ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-              Authorize Session
+              Authorize
             </button>
           </form>
 

@@ -8,6 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const auth = supabase.auth;
 export const db = 'SUPABASE_INSTANCE';
 
+// The User type used across OSA FAGOS
 export type User = { 
   uid: string; 
   email: string; 
@@ -50,6 +51,7 @@ export const logout = async () => {
 };
 
 export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void) => {
+    // We map Supabase's 'id' to our project's 'uid' for consistency
     const firebaseUser = (u: any): User | null => u ? { 
         uid: u.id, 
         email: u.email, 
@@ -82,7 +84,6 @@ export const getDocs = async (q: any) => {
             }
         }
     }
-    // Corrected destructuring to fix TypeScript 2339
     const { data: res, error: err } = await req;
     if (err) throw err;
 
