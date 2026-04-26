@@ -8,13 +8,12 @@ import StudentAssistant from './pages/StudentAssistant';
 import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
-import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertCircle } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertTriangle } from 'lucide-react';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<any>(null);
   
-  // MFA States
   const [mfaStatus, setMfaStatus] = useState<'checking' | 'setup' | 'verify' | 'verified'>('checking');
   const [qrCode, setQrCode] = useState('');
   const [secretKey, setSecretKey] = useState(''); 
@@ -24,16 +23,15 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // Use a ref to prevent double-processing during rapid auth events
-  const isSyncing = useRef(false);
+  // PREVENT RACE CONDITIONS: This ref stops the "double-trigger" loop seen in your logs
+  const isProcessing = useRef(false);
   
   const navigate = useNavigate();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(null, async (u) => {
-      // If we are already handling an enrollment/verification check, ignore duplicate triggers
-      if (isSyncing.current) return;
-      isSyncing.current = true;
+      if (isProcessing.current) return;
+      isProcessing.current = true;
 
       try {
         if (u) {
@@ -48,18 +46,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             if (factorsErr) throw factorsErr;
 
             const verifiedFactor = factorsData?.totp?.find(f => (f.status as string) === 'verified');
-            const unverifiedFactor = factorsData?.totp?.find(f => (f.status as string) === 'unverified');
 
             if (verifiedFactor) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // Loop-Breaker: Clean up ghost attempts
-              if (unverifiedFactor) {
-                await supabase.auth.mfa.unenroll({ factorId: unverifiedFactor.id });
+              // 1. NUKE AND PAVE: If no verified factor exists, delete ALL existing factors
+              // This clears the "Friendly name already exists" error once and for all.
+              if (factorsData?.totp && factorsData.totp.length > 0) {
+                console.log("MFA Gate: Cleaning up existing security factors...");
+                for (const factor of factorsData.totp) {
+                  await supabase.auth.mfa.unenroll({ factorId: factor.id });
+                }
               }
 
-              // Fresh Enrollment with an explicit Friendly Name
+              // 2. Start fresh enrollment
               const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({ 
                 factorType: 'totp',
                 friendlyName: 'OSA FAGOS Authenticator' 
@@ -74,23 +75,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
-          // Public Access: Portal is visible for non-logged in users
           setUser(null);
           setMfaStatus('verified');
         }
       } catch (err: any) {
         console.error("Auth Guard Error:", err.message);
-        // If a user is logged in but MFA fails, we STAY in the gate and show the error
-        // instead of failing open to the login screen.
+        // If an error happens while logged in, stay on the setup screen so the user can see the error.
         if (u) {
-          setError("Security handshake failed. Please refresh the page.");
+          setError(err.message || "Security handshake failed.");
           setMfaStatus('setup'); 
         } else {
           setMfaStatus('verified');
         }
       } finally {
         setInitializing(false);
-        isSyncing.current = false;
+        isProcessing.current = false;
       }
     });
     return () => unsub();
@@ -101,8 +100,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const userDoc = await getDoc(doc(db, 'admins', u.uid));
       let role = userDoc.exists() ? userDoc.data().role : 'staff';
       
-      if (!userDoc.exists()) {
-        role = u.email === 'christiantomaque18@gmail.com' ? 'developer' : 'staff';
+      if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
+        role = 'developer';
         await setDoc(doc(db, 'admins', u.uid), {
           email: u.email,
           displayName: u.displayName || 'User',
@@ -154,7 +153,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // --- MFA GATE UI ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-6 text-[#ededed]">
@@ -166,7 +164,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           <p className="text-[#a1a1a1] text-xs mb-8 uppercase tracking-widest font-semibold">Complete Security Setup</p>
           
           {mfaStatus === 'setup' && (
-            <div className="space-y-6 mb-8">
+            <div className="space-y-6 mb-8 animate-in fade-in zoom-in duration-300">
               <div className="bg-white p-3 rounded-2xl inline-block shadow-inner mx-auto">
                 <div 
                   className="w-40 h-40 flex items-center justify-center"
@@ -177,9 +175,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               <div className="text-left space-y-2">
                 <div className="flex items-center gap-2 text-[10px] font-bold text-[#a1a1a1] ml-1 uppercase">
                   <Info className="w-3.5 h-3.5" />
-                  <span>CANT SCAN? USE THIS KEY</span>
+                  <span>Manual Setup Key</span>
                 </div>
-                <div className="flex items-center justify-between gap-3 bg-[#1c1c1c] border border-[#2e2e2e] p-3 rounded-xl">
+                <div className="flex items-center justify-between gap-3 bg-[#1c1c1c] border border-[#2e2e2e] p-3 rounded-xl transition-all hover:border-[#3ecf8e]/30">
                   <code className="text-sm font-mono text-[#3ecf8e] truncate flex-1">{secretKey}</code>
                   <button onClick={handleCopyKey} className="p-2 hover:bg-[#3ecf8e]/10 rounded-lg transition-all text-[#3ecf8e]">
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -198,19 +196,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                 value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full text-center tracking-[0.5em] font-mono text-2xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3 rounded-xl outline-none focus:border-[#3ecf8e]"
+                className="w-full text-center tracking-[0.5em] font-mono text-2xl bg-[#1c1c1c] border border-[#2e2e2e] text-[#3ecf8e] py-3 rounded-xl outline-none focus:border-[#3ecf8e] transition-all"
               />
             </div>
             {error && (
               <div className="flex items-center gap-2 text-red-500 text-[10px] font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
-                <AlertCircle className="w-3 h-3" />
+                <AlertTriangle className="w-3 h-3" />
                 {error}
               </div>
             )}
             <button 
               type="submit" 
               disabled={verifying || otpInput.length < 6}
-              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase tracking-widest text-xs py-4 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-40"
+              className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-black uppercase tracking-widest text-xs py-4 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-40 shadow-lg shadow-[#3ecf8e]/5"
             >
               {verifying ? <Loader2 className="animate-spin w-5 h-5" /> : <ArrowRight className="w-5 h-5" />}
               {mfaStatus === 'setup' ? 'Verify and Activate' : 'Continue to Dashboard'}
