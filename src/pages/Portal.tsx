@@ -9,8 +9,8 @@ import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
 // --- Image Placeholders ---
-import cdmLogo from '../logo/images/cdmlogo.png';
-import osaLogo from '../logo/images/osalogo.png';
+const cdmLogo = '/logo/images/cdmlogo.png';
+const osaLogo = '/logo/images/osalogo.png';
 
 // --- Types ---
 type Task = {
@@ -158,9 +158,12 @@ export default function Portal() {
 
       let signatureData = '';
       try {
-        signatureData = sigPad.current?.getTrimmedCanvas().toDataURL('image/png') || '';
+        const svgData = sigPad.current?.getSignaturePad().toDataURL('image/svg+xml');
+        if (svgData) {
+          signatureData = svgData;
+        }
       } catch (e) {
-        signatureData = sigPad.current?.getCanvas().toDataURL('image/png') || '';
+        console.error("Signature capture failed", e);
       }
 
       await addDoc(collection(db, 'service_records'), {

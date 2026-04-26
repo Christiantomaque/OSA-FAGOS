@@ -1,4 +1,77 @@
 import { useState, useEffect, useRef } from 'react';
+
+const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime }: { startTime?: string, accumulatedSeconds?: number, scheduledEndTime?: string }) => {
+  const [totalSeconds, setTotalSeconds] = useState(accumulatedSeconds);
+  const [isAutoStopped, setIsAutoStopped] = useState(false);
+
+  useEffect(() => {
+    if (!startTime) {
+      setTotalSeconds(accumulatedSeconds);
+      return;
+    }
+    
+    // Lazy Cutoff Illusion: If now is already past scheduledEndTime, freeze at the max
+    if (scheduledEndTime) {
+       const now = Date.now();
+       const end = new Date(scheduledEndTime).getTime();
+       // Correct end date for rollover if needed
+       let endTarget = end;
+       const start = new Date(startTime).getTime();
+       if (endTarget <= start) {
+          const d = new Date(endTarget);
+          d.setDate(d.getDate() + 1);
+          endTarget = d.getTime();
+       }
+
+       if (now >= endTarget) {
+          const delta = Math.floor((endTarget - start) / 1000);
+          setTotalSeconds(accumulatedSeconds + delta);
+          setIsAutoStopped(true);
+          return;
+       }
+    }
+
+    // Update live only if started and not auto-stopped
+    const start = new Date(startTime).getTime();
+    setTotalSeconds(accumulatedSeconds + Math.floor((Date.now() - start) / 1000));
+    
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (scheduledEndTime) {
+         const end = new Date(scheduledEndTime).getTime();
+         let endTarget = end;
+         if (endTarget <= start) {
+            const d = new Date(endTarget);
+            d.setDate(d.getDate() + 1);
+            endTarget = d.getTime();
+         }
+         
+         if (now >= endTarget) {
+            const delta = Math.floor((endTarget - start) / 1000);
+            setTotalSeconds(accumulatedSeconds + delta);
+            setIsAutoStopped(true);
+            clearInterval(interval);
+            return;
+         }
+      }
+      setTotalSeconds(accumulatedSeconds + Math.floor((now - start) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startTime, accumulatedSeconds, scheduledEndTime]);
+
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  
+  return (
+    <div className="flex flex-col items-center">
+      <span className={`font-mono text-sm tracking-tighter ${isAutoStopped ? 'text-red-400' : ''}`}>
+        {hrs.toString().padStart(2, '0')}:{mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}
+      </span>
+      {isAutoStopped && <span className="text-[8px] font-bold text-red-500 uppercase tracking-widest mt-0.5">Auto-Stopped</span>}
+    </div>
+  );
+};
 import { collection, query, getDocs, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, deleteDoc, setDoc, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, db, auth, logout, onSnapshot } from '../lib/supabase';
 import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X, CheckSquare } from 'lucide-react';
@@ -39,8 +112,9 @@ type ServiceRecord = {
   taskId?: string;
   creditHours: number;
   staffName?: string;
-  status: 'pending' | 'verified' | 'active';
+  status: 'pending' | 'verified' | 'active' | 'paused' | 'auto_stopped';
   startTime?: any;
+  accumulated_seconds?: number;
 };
 
 type TaskFormData = {
@@ -89,6 +163,20 @@ type CompletionApproval = {
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  
+  const getAdjustedEndTime = (record: ServiceRecord) => {
+    if (!record.scheduledEndTime) return null;
+    const end = new Date(record.scheduledEndTime).getTime();
+    const start = new Date(record.scheduledStartTime || record.timeIn).getTime();
+    return end <= start ? end + 86400000 : end;
+  };
+
+  const isAutoStoppedIllusion = (record: ServiceRecord) => {
+    if (record.status !== 'active') return false;
+    const adjustedEnd = getAdjustedEndTime(record);
+    return adjustedEnd ? Date.now() > adjustedEnd : false;
+  };
+
   const [authorized, setAuthorized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -108,6 +196,21 @@ export default function Admin() {
   const [editingRecord, setEditingRecord] = useState<ServiceRecord | null>(null);
   const [staffOption, setStaffOption] = useState<'me' | 'other'>('me');
   const [searchTerm, setSearchTerm] = useState('');
+  // ============================================================================
+  // LAZY SNAPSHOT TRIGGER: Run piggyback sweeper once on mount
+  // ============================================================================
+  useEffect(() => {
+    const triggerSweep = async () => {
+      try {
+        console.log("[Lazy Sweep] Triggering backend piggyback cleanup...");
+        await fetch('/api/service-records'); // This GET triggers sweepActiveRecords() on backend
+      } catch (e) {
+        console.error("[Lazy Sweep] Trigger failed", e);
+      }
+    };
+    if (authorized) triggerSweep();
+  }, [authorized]);
+
   const [recordsSearch, setRecordsSearch] = useState('');
   const [progressSearch, setProgressSearch] = useState('');
   const [historySearch, setHistorySearch] = useState('');
@@ -319,10 +422,12 @@ export default function Admin() {
       if (!user) throw new Error("No authenticated user");
       let signatureData = '';
       try {
-        signatureData = adminSigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+        const svgData = adminSigCanvas.current?.getSignaturePad().toDataURL('image/svg+xml');
+        if (svgData) {
+          signatureData = svgData;
+        }
       } catch (e) {
-        console.warn("Trimming failed, saving raw canvas", e);
-        signatureData = adminSigCanvas.current.getCanvas().toDataURL('image/png');
+        console.error("Signature capture failed", e);
       }
       
       const userRef = doc(db, 'admins', user.uid);
@@ -487,14 +592,12 @@ export default function Admin() {
   const handleStartSession = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      
       await updateDoc(doc(db, 'service_records', record.id), {
         startTime: now.toISOString(),
-        timeIn: now.toISOString(),
+        timeIn: record.timeIn || now.toISOString(),
         status: 'active',
         updatedAt: serverTimestamp()
       });
-      // Result handled by onSnapshot
       showAlert("Success", "Session started.", "success");
     } catch (e: any) {
       console.error("FULL ERROR OBJECT:", e);
@@ -502,32 +605,59 @@ export default function Admin() {
     }
   };
 
+  const handlePauseSession = async (record: ServiceRecord) => {
+    try {
+      if (!record.startTime) return;
+      const now = new Date();
+      const start = new Date(record.startTime);
+      const deltaSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+      const newAccumulated = (record.accumulated_seconds || 0) + deltaSeconds;
+
+      await updateDoc(doc(db, 'service_records', record.id), {
+        accumulated_seconds: newAccumulated,
+        startTime: null,
+        status: 'paused',
+        updatedAt: serverTimestamp()
+      });
+      showAlert("Success", "Session paused.", "success");
+    } catch (e: any) {
+      showAlert("Error", "Failed to pause session", "error");
+    }
+  };
+
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      const startTime = new Date(record.timeIn);
+      let deltaSeconds = 0;
+      if (record.startTime) {
+        const start = new Date(record.startTime);
+        deltaSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+      }
+      const newAccumulated = (record.accumulated_seconds || 0) + deltaSeconds;
       
-      let durationHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+      let durationHours = newAccumulated / 3600;
 
       // Late Penalty Logic
+      const startTimeObj = record.timeIn ? new Date(record.timeIn) : now;
       if (record.scheduledEndTime) {
         const schEndObj = new Date(record.scheduledEndTime);
-        if (schEndObj.getTime() <= (record.scheduledStartTime ? new Date(record.scheduledStartTime).getTime() : startTime.getTime())) {
+        if (schEndObj.getTime() <= (record.scheduledStartTime ? new Date(record.scheduledStartTime).getTime() : startTimeObj.getTime())) {
            schEndObj.setDate(schEndObj.getDate() + 1);
         }
         
         if (now.getTime() > schEndObj.getTime()) {
-           durationHours = (schEndObj.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+           durationHours = (schEndObj.getTime() - startTimeObj.getTime()) / (1000 * 60 * 60);
         }
       }
       
       if (durationHours < 0) durationHours = 0;
-      
       const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
       
       await updateDoc(doc(db, 'service_records', record.id), {
         timeOut: now.toISOString(),
         creditHours: creditHours,
+        accumulated_seconds: newAccumulated,
+        startTime: null,
         status: 'pending', // Reset to pending for approval
         updatedAt: serverTimestamp()
       });
@@ -583,6 +713,9 @@ export default function Admin() {
 
   const sendCompletionEmail = async (student: StudentProgress) => {
     try {
+      // Final Safety Net: Trigger backend sweep before generation
+      await fetch('/api/generate-pdf', { method: 'POST' });
+      
       // Find the most recent record to get semester/AY/signature info
       const latestRecord = [...student.records].sort((a, b) => b.date.localeCompare(a.date))[0];
       const adminDoc = members.find(m => m.email === user?.email);
@@ -687,6 +820,9 @@ const handleApproveCompletion = async (student: StudentProgress) => {
   // --- NEW FEATURE: PREVIEW / PRINT PDF ---
   const handlePreviewPDF = async (student: StudentProgress) => {
     try {
+      // Final Safety Net: Trigger backend sweep before generation
+      await fetch('/api/generate-pdf', { method: 'POST' });
+
       const latestRecord = [...student.records].sort((a, b) => b.date.localeCompare(a.date))[0];
       const adminDoc = members.find(m => m.email === user?.email);
 
@@ -1319,7 +1455,13 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                              {r.bracket && <div><span className="text-[#666] mr-1">Bracket:</span>{r.bracket}</div>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
+                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">
+                          {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
+                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime} />
+                          ) : (
+                            `${r.status === 'auto_stopped' ? (r.creditHours).toFixed(1) : r.creditHours}h`
+                          )}
+                        </td>
                         <td className="px-6 py-4">
                            <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
                            {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
@@ -1328,40 +1470,55 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                            </div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                            {r.status.toUpperCase()}
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : (r.status === 'active' || r.status === 'auto_stopped') ? (isAutoStoppedIllusion(r) || r.status === 'auto_stopped' ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500') : 'bg-amber-500/20 text-amber-500'}`}>
+                            {isAutoStoppedIllusion(r) ? 'AUTO-STOPPED' : r.status.replace('_', ' ').toUpperCase()}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end items-center gap-2">
-                            {(r.status === 'pending' || r.status === 'active') && (
+                            {(r.status === 'pending' || r.status === 'active' || r.status === 'paused') && (
                               <button 
                                 onClick={() => {
-                                  if (!checkIsWithinSchedule(r)) {
-                                    showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                                  const expired = isAutoStoppedIllusion(r);
+                                  if (!checkIsWithinSchedule(r) || expired) {
+                                    showAlert("Unauthorized", expired ? "Session has automatically ended." : "This task can only be started/stopped during its assigned window.", "warning");
                                     return;
                                   }
                                   if (!r.startTime) handleStartSession(r);
-                                  else handleClockOut(r);
+                                  else handlePauseSession(r);
                                 }}
                                 className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
                                   r.creditHours >= 20 
                                     ? 'bg-gray-600 cursor-not-allowed text-white' 
-                                    : !checkIsWithinSchedule(r)
+                                    : (!checkIsWithinSchedule(r) || isAutoStoppedIllusion(r))
                                       ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                      : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                      : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
                                 }`}
-                                disabled={r.creditHours >= 20}
+                                disabled={r.creditHours >= 20 || isAutoStoppedIllusion(r)}
                                 title={
                                   r.creditHours >= 20 
                                     ? "Completed" 
-                                    : !checkIsWithinSchedule(r) 
-                                      ? "Outside assigned schedule" 
-                                      : (!r.startTime ? "Start Session" : "Stop Session")
+                                    : isAutoStoppedIllusion(r)
+                                      ? "Auto-Stopped"
+                                      : !checkIsWithinSchedule(r) 
+                                        ? "Outside assigned schedule" 
+                                        : (!r.startTime ? "Start/Resume Session" : "Pause Session")
                                 }
                               >
                                 <Clock className="w-3 h-3" /> 
-                                {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start Now' : 'Stop Time')}
+                                {r.creditHours >= 20 ? 'Completed' : (!r.startTime ? (r.accumulated_seconds ? 'Resume' : 'Start') : 'Pause')}
+                              </button>
+                            )}
+                            
+                            {(r.status === 'active' || r.status === 'paused') && (
+                              <button 
+                                onClick={() => handleClockOut(r)}
+                                className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
+                                title="Complete Session"
+                                disabled={isAutoStoppedIllusion(r)}
+                              >
+                                <CheckSquare className="w-3 h-3" /> 
+                                Complete
                               </button>
                             )}
                             
@@ -1400,8 +1557,8 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                            <div className="font-bold text-[#ededed] truncate"><span className="text-[#a1a1a1] text-[10px] font-normal mr-1">Full Name:</span>{r.studentName}</div>
-                           <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0 ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : r.status === 'active' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                             {r.status}
+                           <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0 ${r.status === 'verified' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : (r.status === 'active' || r.status === 'auto_stopped') ? (isAutoStoppedIllusion(r) || r.status === 'auto_stopped' ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500') : 'bg-amber-500/20 text-amber-500'}`}>
+                             {isAutoStoppedIllusion(r) ? 'AUTO-STOPPED' : r.status.replace('_', ' ')}
                            </span>
                         </div>
                         <div className="text-[10px] text-[#a1a1a1] mt-1 space-y-0.5 font-mono">
@@ -1413,7 +1570,13 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
-                        <div className="font-bold text-[#3ecf8e] text-xl">{r.creditHours}h</div>
+                        <div className="font-bold text-[#3ecf8e] text-xl">
+                          {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
+                            <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime} />
+                          ) : (
+                            `${r.status === 'auto_stopped' ? (r.creditHours).toFixed(1) : r.creditHours}h`
+                          )}
+                        </div>
                       </div>
                     </div>
                     
@@ -1430,34 +1593,48 @@ const handleApproveCompletion = async (student: StudentProgress) => {
 
                     <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">
                       <div className="flex gap-1">
-                        {(r.status === 'pending' || r.status === 'active') && (
+                        {(r.status === 'pending' || r.status === 'active' || r.status === 'paused') && (
                           <button 
                             onClick={() => {
-                              if (!checkIsWithinSchedule(r)) {
-                                showAlert("Outside Schedule", "This task can only be started/stopped during its assigned date and time window.", "warning");
+                              const expired = isAutoStoppedIllusion(r);
+                              if (!checkIsWithinSchedule(r) || expired) {
+                                showAlert("Unauthorized", expired ? "Session has automatically ended." : "This task can only be started/stopped during its assigned window.", "warning");
                                 return;
                               }
                               if (!r.startTime) handleStartSession(r);
-                              else handleClockOut(r);
+                              else handlePauseSession(r);
                             }}
                             className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${
                               r.creditHours >= 20 
                                 ? 'bg-gray-600 cursor-not-allowed text-white' 
-                                : !checkIsWithinSchedule(r)
+                                : (!checkIsWithinSchedule(r) || isAutoStoppedIllusion(r))
                                   ? 'bg-[#2e2e2e] text-[#666] cursor-not-allowed'
-                                  : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                                  : !r.startTime ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
                             }`}
-                            disabled={r.creditHours >= 20}
+                            disabled={r.creditHours >= 20 || isAutoStoppedIllusion(r)}
                             title={
                               r.creditHours >= 20 
                                 ? "Completed" 
-                                : !checkIsWithinSchedule(r) 
-                                  ? "Outside assigned schedule" 
-                                  : (!r.startTime ? "Start Session" : "Stop Session")
+                                : isAutoStoppedIllusion(r)
+                                  ? "Auto-Stopped"
+                                  : !checkIsWithinSchedule(r) 
+                                    ? "Outside assigned schedule" 
+                                    : (!r.startTime ? "Start/Resume Session" : "Pause Session")
                             }
                           >
                             <Clock className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? 'Start' : 'Stop')}</span>
+                            <span className="text-[10px] font-bold uppercase">{r.creditHours >= 20 ? 'Completed' : (!r.startTime ? (r.accumulated_seconds ? 'Resume' : 'Start') : 'Pause')}</span>
+                          </button>
+                        )}
+                        {(r.status === 'active' || r.status === 'paused') && (
+                          <button 
+                            onClick={() => handleClockOut(r)}
+                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
+                            title="Complete Session"
+                            disabled={isAutoStoppedIllusion(r)}
+                          >
+                            <CheckSquare className="w-3.5 h-3.5" /> 
+                            <span className="text-[10px] font-bold uppercase">Complete</span>
                           </button>
                         )}
                         <button onClick={() => handleEditRecord(r)} className="p-1.5 text-[#a1a1a1] hover:text-amber-500 transition-colors" title="Edit Log"><Edit2 className="w-3.5 h-3.5" /></button>

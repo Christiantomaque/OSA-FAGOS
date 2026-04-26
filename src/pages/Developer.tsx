@@ -319,10 +319,12 @@ export default function Developer() {
       if (!user) throw new Error("No authenticated user");
       let signatureData = '';
       try {
-        signatureData = adminSigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+        const svgData = adminSigCanvas.current?.getSignaturePad().toDataURL('image/svg+xml');
+        if (svgData) {
+          signatureData = svgData;
+        }
       } catch (e) {
-        console.warn("Trimming failed, saving raw canvas", e);
-        signatureData = adminSigCanvas.current.getCanvas().toDataURL('image/png');
+        console.error("Signature capture failed", e);
       }
       
       const userRef = doc(db, 'admins', user.uid);

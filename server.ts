@@ -4,17 +4,114 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Initialize Supabase Admin for Sweeper (using service role if available, or anon if RLS allows)
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function sweepActiveRecords() {
+  const now = new Date();
+  
+  // 1. Fetch all currently active sessions
+  const { data: activeRecords, error } = await supabase
+    .from('service_records')
+    .select('*')
+    .eq('status', 'active');
+
+  if (error || !activeRecords || activeRecords.length === 0) return [];
+
+  const results = [];
+  for (const r of activeRecords) {
+    if (!r.scheduled_end_time && !r.scheduledEndTime) continue;
+    
+    // Handle both naming styles just in case
+    const schEnd = r.scheduledEndTime || r.scheduled_end_time;
+    const schStart = r.scheduledStartTime || r.scheduled_start_time || r.timeIn;
+    
+    let endTarget = new Date(schEnd);
+    const startTarget = new Date(schStart);
+    
+    // Correct endTarget date if it rollover to next day (e.g. 10pm to 2am)
+    if (endTarget.getTime() <= startTarget.getTime()) {
+      endTarget.setDate(endTarget.getDate() + 1);
+    }
+
+    // Determine if session has expired (using 1 min grace period)
+    if (now.getTime() > endTarget.getTime() + 60000) {
+      try {
+        let deltaSeconds = 0;
+        if (r.startTime) {
+          const startTime = new Date(r.startTime);
+          // Boundary is the scheduled end time, not current time
+          deltaSeconds = Math.floor((endTarget.getTime() - startTime.getTime()) / 1000);
+        }
+        
+        const newAccumulated = Math.max(0, (r.accumulated_seconds || 0) + deltaSeconds);
+        const durationHours = newAccumulated / 3600;
+        const creditHours = Math.max(0, Math.min(20, Number(durationHours.toFixed(1))));
+
+        const updatePayload = {
+          timeOut: endTarget.toISOString(),
+          creditHours: creditHours,
+          accumulated_seconds: newAccumulated,
+          startTime: null,
+          status: 'auto_stopped',
+          updatedAt: new Date().toISOString()
+        };
+
+        await supabase.from('service_records').update(updatePayload).eq('id', r.id);
+        results.push({ id: r.id, studentName: r.studentName });
+        console.log(`[Sweeper] Auto-stopped expired session for ${r.studentName}`);
+      } catch (e) {
+        console.error(`[Sweeper] Failed to stop record ${r.id}`, e);
+      }
+    }
+  }
+  return results;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
+
+  // Piggyback Route: Sweeps records before returning them
+  app.get('/api/service-records', async (req: Request, res: Response) => {
+    try {
+      // 1. Run the Lazy Sweeper
+      await sweepActiveRecords();
+      
+      // 2. Fetch fresh records
+      const { data, error } = await supabase
+        .from('service_records')
+        .select('*')
+        .order('createdAt', { ascending: false });
+        
+      if (error) throw error;
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: 'Failed to fetch records', details: error.message });
+    }
+  });
+
+  // Safety Net Trigger: Sweeps records before generating a report
+  app.post('/api/generate-pdf', async (req: Request, res: Response) => {
+    try {
+      console.log("[Safety Net] Triggering on-demand sweep before report generation...");
+      await sweepActiveRecords();
+      res.json({ success: true, message: 'Data synchronized' });
+    } catch (error: any) {
+      res.status(500).json({ error: 'Sync failed', details: error.message });
+    }
+  });
 
   // API Route for sending the completion form
   app.post('/api/send-completion-form', async (req: Request, res: Response) => {

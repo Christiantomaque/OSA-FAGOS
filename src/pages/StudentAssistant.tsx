@@ -234,10 +234,12 @@ export default function Staff() {
     try {
       let signatureData = '';
       try {
-        signatureData = staffSigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+        const svgData = staffSigCanvas.current?.getSignaturePad().toDataURL('image/svg+xml');
+        if (svgData) {
+          signatureData = svgData;
+        }
       } catch (e) {
-        console.warn("Trimming failed, saving raw canvas", e);
-        signatureData = staffSigCanvas.current.getCanvas().toDataURL('image/png');
+        console.error("Signature capture failed", e);
       }
       await updateDoc(doc(db, 'admins', user!.uid), {
         signature: signatureData,
