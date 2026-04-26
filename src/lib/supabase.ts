@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
 // --- INITIALIZATION ---
-// Ensure these variables are set in your .env.local or Vercel environment
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
@@ -24,7 +23,7 @@ export const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            // FIXED: Route them to /login so the Two-Step Verification gate catches them immediately
+            // This routes them to the login page where the MFA gate in App.tsx catches them
             redirectTo: window.location.origin + '/login',
             // @ts-ignore
             flowType: 'pkce' 
@@ -47,36 +46,11 @@ export const signInWithMicrosoft = async () => {
     return data;
 };
 
-/**
- * MFA HELPER: Generates a code, saves it to the DB, 
- * and triggers the Supabase Edge Function to send the actual email.
- */
-export const sendVerificationCode = async (email: string) => {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // 1. Save code to the otp_verification table (valid for 5 mins)
-    await supabase.from('otp_verification').upsert({ 
-        email, 
-        code, 
-        expires_at: new Date(Date.now() + 5 * 60000).toISOString() 
-    });
-
-    // 2. Invoke the Edge Function to send the email via Resend/SMTP
-    // Ensure you have created this function in your Supabase Dashboard
-    const { error } = await supabase.functions.invoke('send-otp', {
-        body: { email, code },
-    });
-
-    if (error) {
-        console.error("Failed to dispatch OTP email:", error);
-        throw new Error("Could not send verification code. Please try again.");
-    }
-};
+// NOTE: sendVerificationCode has been removed. 
+// MFA is now handled via Supabase TOTP (Google Authenticator) in App.tsx.
 
 export const logout = async () => {
-    // Clear the 7-day trust token on logout for security
-    const user = (await supabase.auth.getUser()).data.user;
-    if (user) localStorage.removeItem(`fagos_trust_${user.id}`);
+    // We clear the session for security on logout
     return await supabase.auth.signOut();
 };
 
@@ -98,6 +72,7 @@ export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void
 // ==========================================
 // 2. FIRESTORE-STYLE SHIMS (CRUD)
 // ==========================================
+// These remain to ensure compatibility with your existing OSA FAGOS components.
 
 export const collection = (db: any, path: string) => ({ type: 'collection', path });
 export const doc = (db: any, path: string, id: string) => ({ type: 'doc', path, id });
@@ -171,7 +146,7 @@ export const onSnapshot = (q: any, cb: (snapshot: any) => void) => {
 
 export const serverTimestamp = () => new Date().toISOString();
 
-// Legacy / Email Shims
+// Legacy Auth Shims
 export const signInWithEmailAndPassword = async (authObj: any, email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;

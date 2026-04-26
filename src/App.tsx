@@ -61,7 +61,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           console.error("Auth/MFA Error:", err);
         }
       } else {
-        setMfaStatus('checking');
+        // FIX: If no user is logged in, stop checking and mark as 'verified' 
+        // so the public can see the Portal without the loader blocking them.
+        setUser(null);
+        setMfaStatus('verified');
       }
       setInitializing(false);
     });
@@ -124,13 +127,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // If we are still initializing the auth state, show the loader.
   if (initializing || mfaStatus === 'checking') return (
     <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center text-[#3ecf8e]">
       <Loader2 className="animate-spin w-8 h-8" />
     </div>
   );
 
-  // --- THE GATE: If user needs to Setup OR Verify ---
+  // --- THE GATE: Only show if a user is LOGGED IN but NOT verified ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-6 text-[#ededed]">
