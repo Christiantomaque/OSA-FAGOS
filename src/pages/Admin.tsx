@@ -54,7 +54,7 @@ const LiveClock = ({
   const mins = Math.floor((totalSeconds % 3600) / 60);
   const secs = totalSeconds % 60;
   
-  const calculatedCreditHours = (totalSeconds / 3600).toFixed(4);
+  const calculatedCreditHoursText = formatDynamicTimeDisplay(totalSeconds);
 
   let remainingWarning = null;
   if (scheduledStartTime && scheduledEndTime && startTime) {
@@ -98,7 +98,7 @@ const LiveClock = ({
         </span>
       </div>
       <div className="text-[10px] text-[#a1a1a1] mt-0.5">
-        Credit: <span className="text-[#ededed] font-bold">{calculatedCreditHours} {Number(calculatedCreditHours) === 1 ? 'hr' : 'hrs'}</span>
+        Credit: <span className="text-[#ededed] font-bold">{calculatedCreditHoursText}</span>
       </div>
       {isAutoStopped && <span className="text-[8px] font-bold text-red-500 uppercase tracking-widest mt-1">Auto-Stopped</span>}
       {remainingWarning}
@@ -110,7 +110,7 @@ import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X, CheckSquare } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { generateObligationPDF } from '../utils/pdfGenerator';
-import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM, formatDynamicTimeDisplay } from '../lib/utils';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
 import { AlertModal } from '../components/ui/AlertModal';
@@ -1494,7 +1494,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                           {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
                             <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} scheduledStartTime={r.scheduledStartTime || tasks.find(t => t.id === r.taskId)?.startTime} taskDuration={tasks.find(t => t.id === r.taskId)?.duration} />
                           ) : (
-                            `${r.status === 'auto_stopped' ? (r.creditHours).toFixed(1) : r.creditHours}h`
+                            formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
                           )}
                         </td>
                         <td className="px-6 py-4">
@@ -1609,7 +1609,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                           {(r.status === 'active' || r.status === 'paused' || (!r.creditHours && r.accumulated_seconds)) ? (
                             <LiveClock startTime={r.startTime} accumulatedSeconds={r.accumulated_seconds || 0} scheduledEndTime={r.scheduledEndTime || tasks.find(t => t.id === r.taskId)?.endTime} scheduledStartTime={r.scheduledStartTime || tasks.find(t => t.id === r.taskId)?.startTime} taskDuration={tasks.find(t => t.id === r.taskId)?.duration} />
                           ) : (
-                            `${r.status === 'auto_stopped' ? (r.creditHours).toFixed(1) : r.creditHours}h`
+                            formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))
                           )}
                         </div>
                       </div>

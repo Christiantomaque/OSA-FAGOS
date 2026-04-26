@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { LayoutDashboard, LogOut, CheckCircle2, Clock, Users, Plus, Loader2, Mail, Edit2, Trash2, History, ChevronRight, Search, AlertCircle, Settings, Upload, Printer, RotateCcw, Menu, X, CheckSquare } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { generateObligationPDF } from '../utils/pdfGenerator';
-import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM, formatDynamicTimeDisplay } from '../lib/utils';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
 import { AlertModal } from '../components/ui/AlertModal';
@@ -1321,7 +1321,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                              {r.bracket && <div><span className="text-[#666] mr-1">Bracket:</span>{r.bracket}</div>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{r.creditHours}h</td>
+                        <td className="px-6 py-4 text-center font-bold text-[#3ecf8e] text-lg">{formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))}</td>
                         <td className="px-6 py-4">
                            <div className="text-xs font-bold text-[#ededed]">{r.taskTitle}</div>
                            {r.staffName && <div className="text-[10px] text-[#3ecf8e] mt-1 uppercase tracking-wide">Pub: {r.staffName}</div>}
@@ -1415,7 +1415,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-[9px] uppercase tracking-wider text-[#a1a1a1] font-bold mb-0.5">Credit Hour</div>
-                        <div className="font-bold text-[#3ecf8e] text-xl">{r.creditHours}h</div>
+                        <div className="font-bold text-[#3ecf8e] text-xl">{formatDynamicTimeDisplay(Math.floor((r.creditHours || 0) * 3600))}</div>
                       </div>
                     </div>
                     
