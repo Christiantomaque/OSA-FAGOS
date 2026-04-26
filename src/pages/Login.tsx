@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -21,8 +21,18 @@ export default function Login() {
   const [loading, setLoading] = useState(true);
   const [allowSignups, setAllowSignups] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
+  
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Listen for bounce-back errors from AuthGuard (SSO Rejections)
+  useEffect(() => {
+    if (location.state?.authError) {
+      setAuthError(location.state.authError);
+      // Clear the state so the error doesn't persist if they refresh the page
+      navigate('/login', { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -42,7 +52,8 @@ export default function Login() {
     setIsSubmitting(true);
     try {
       if (isRegistering) {
-        if (!allowSignups) throw new Error("Signups disabled.");
+        // ENFORCE EXACT WORDING ON MANUAL SIGNUP
+        if (!allowSignups) throw new Error("Registration is not allowed at the moment. Please contact the admin.");
         await createUserWithEmailAndPassword(auth, authEmail, authPassword);
       } else {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
@@ -76,7 +87,7 @@ export default function Login() {
         
         <form onSubmit={handleAuth} className="space-y-3.5">
           {authError && (
-            <div className={`p-2.5 border text-[10px] font-bold rounded-lg text-left leading-relaxed ${resetSent ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+            <div className={`p-2.5 border text-[10px] font-bold rounded-lg text-left leading-relaxed bg-red-500/10 border-red-500/20 text-red-500`}>
               {authError}
             </div>
           )}
@@ -115,7 +126,7 @@ export default function Login() {
             className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] disabled:opacity-40 text-black font-black uppercase tracking-[0.1em] text-[10px] py-3.5 rounded-xl transition-all mt-2 flex justify-center items-center gap-2 active:scale-95"
           >
             {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
-            {isRegistering ? 'Create Official Account' : 'Sign In to Dashboard'}
+            {isRegistering ? 'Create Official Account' : 'Sign In'}
           </button>
 
           {!isRegistering && (
@@ -126,6 +137,7 @@ export default function Login() {
                 <div className="flex-1 h-px bg-[#262626]" />
               </div>
 
+              {/* SSO Buttons remain active so existing users can still log in, but new users will bounce back. */}
               <div className="grid grid-cols-2 gap-2.5">
                 <button type="button" onClick={() => signInWithGoogle()} className="bg-[#1c1c1c] border border-[#2e2e2e] hover:bg-[#222] text-[#ededed] font-bold py-2 rounded-xl transition-all flex justify-center items-center gap-2 text-[10px] active:scale-95">
                   <Chrome className="w-3 h-3 text-[#3ecf8e]" /> Google
@@ -138,15 +150,17 @@ export default function Login() {
           )}
         </form>
 
-        <div className="mt-8 pt-6 border-t border-[#262626] text-[10px] text-[#666]">
-          {isRegistering ? 'Already registered? ' : 'Need administrative access? '}
-          <button 
-            onClick={() => { setIsRegistering(!isRegistering); setAuthError(''); }}
-            className="text-[#3ecf8e] font-bold uppercase tracking-widest ml-1"
-          >
-            {isRegistering ? 'Sign In' : 'Sign Up'}
-          </button>
-        </div>
+        {allowSignups && (
+          <div className="mt-8 pt-6 border-t border-[#262626] text-[10px] text-[#666]">
+            {isRegistering ? 'Already registered? ' : 'Need administrative access? '}
+            <button 
+              onClick={() => { setIsRegistering(!isRegistering); setAuthError(''); }}
+              className="text-[#3ecf8e] font-bold uppercase tracking-widest ml-1"
+            >
+              {isRegistering ? 'Sign In' : 'Sign Up'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

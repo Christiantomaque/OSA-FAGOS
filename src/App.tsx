@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, doc, getDoc, setDoc, serverTimestamp, db, supabase, User } from './lib/supabase';
+import { onAuthStateChanged, doc, getDoc, setDoc, updateDoc, serverTimestamp, db, supabase, User } from './lib/supabase';
 import Portal from './pages/Portal';
 import Admin from './pages/Admin';
 import Staff from './pages/Staff';
@@ -33,9 +33,42 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
       try {
         if (u) {
+          // --- 1. SYSTEM REGISTRATION LOCKDOWN GATE ---
+          const userDoc = await getDoc(doc(db, 'admins', u.uid));
+          
+          if (!userDoc.exists() && u.email !== 'christiantomaque18@gmail.com') {
+            // Check global settings
+            const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
+            const allowSignups = settingsSnap.exists() ? settingsSnap.data().allowSignups !== false : true;
+            
+            if (!allowSignups) {
+              // BOUNCE UNAUTHORIZED USER: Destroy session and send error to Login.tsx
+              await supabase.auth.signOut();
+              setUser(null);
+              setMfaStatus('verified');
+              setInitializing(false);
+              isSyncing.current = false;
+              navigate('/login', { 
+                state: { authError: "Registration is not allowed at the moment. Please contact the admin." }, 
+                replace: true 
+              });
+              return;
+            } else {
+              // Allowed: Create default profile so MFA knows they exist
+              await setDoc(doc(db, 'admins', u.uid), {
+                email: u.email, displayName: u.displayName || 'User', role: 'staff', lastLogin: serverTimestamp()
+              });
+            }
+          } else if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
+            await setDoc(doc(db, 'admins', u.uid), {
+              email: u.email, displayName: 'Developer', role: 'developer', lastLogin: serverTimestamp()
+            });
+          }
+          // --- END LOCKDOWN GATE ---
+
           setUser(u);
           
-          // 1. THE 30-DAY TRUST LOGIC
+          // 2. THE 30-DAY TRUST LOGIC
           const trustKey = `mfa_trust_${u.uid}`;
           const trustExpiry = localStorage.getItem(trustKey);
           const isTrusted = trustExpiry && Date.now() < parseInt(trustExpiry);
@@ -44,11 +77,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           if (aalErr) throw aalErr;
 
           if (aalData?.currentLevel === 'aal2' || isTrusted) {
-            // ALREADY SECURE: Skip gate and handle routing
             setMfaStatus('verified');
             await handleRoleRouting(u);
           } else {
-            // NEED SECURITY: Check factors
             const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
             if (factorsErr) throw factorsErr;
 
@@ -58,14 +89,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // THE 422 CLEANUP: Nuke existing unverified factors
+              // The 422 Collision Fix
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
                 }
               }
 
-              // FRESH ENROLLMENT
               const { data: enrollData, error: enrollErr } = await supabase.auth.mfa.enroll({ 
                 factorType: 'totp',
                 friendlyName: 'OSA FAGOS Authenticator' 
@@ -79,14 +109,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
-          // PUBLIC VIEWING
           setUser(null);
           setMfaStatus('verified');
         }
       } catch (err: any) {
-        console.error("Auth Guard Loop Detected:", err.message);
-        // Fix 403 Sub Claim
-        if (err.message.includes("sub claim") || err.status === 403) {
+        console.error("Auth Guard Error:", err.message);
+        if (err.message?.includes("sub claim") || err.status === 403) {
           await supabase.auth.signOut();
           localStorage.clear();
           window.location.reload();
@@ -102,21 +130,18 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   const handleRoleRouting = async (u: User) => {
-    // FORCE ROUTING: This solves the "stuck on login page" issue
     const userDoc = await getDoc(doc(db, 'admins', u.uid));
-    let role = userDoc.exists() ? userDoc.data().role : 'staff';
+    let role = 'staff';
     
-    if (!userDoc.exists() && u.email === 'christiantomaque18@gmail.com') {
-      role = 'developer';
-      await setDoc(doc(db, 'admins', u.uid), {
-        email: u.email, displayName: u.displayName || 'User', role, lastLogin: serverTimestamp()
-      });
+    if (userDoc.exists()) {
+      role = userDoc.data().role || 'staff';
+      try { await updateDoc(doc(db, 'admins', u.uid), { lastLogin: serverTimestamp() }); } catch(e){}
     }
 
-    const routes: Record<string, string> = { developer: '/developer', admin: '/admin', student_assistant: '/student-assistant' };
+    const routes: Record<string, string> = { developer: '/developer', admin: '/admin', staff: '/staff', student_assistant: '/student-assistant' };
     const targetPath = routes[role] || '/staff';
     
-    // Only navigate if we are currently at the login gate
+    // Force routing to fix the "stuck on login" bug
     if (window.location.pathname === '/login') {
       navigate(targetPath, { replace: true });
     }
@@ -136,7 +161,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       });
       if (verErr) throw verErr;
 
-      // SUCCESS: Set the 30-day trust token
       if (user) {
         const thirtyDays = Date.now() + (30 * 24 * 60 * 60 * 1000);
         localStorage.setItem(`mfa_trust_${user.uid}`, thirtyDays.toString());
@@ -157,7 +181,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // --- ULTRA-COMPACT SECURITY UI ---
+  // --- COMPACT GATE UI ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
