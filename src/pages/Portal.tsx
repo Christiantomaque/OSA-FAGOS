@@ -3,14 +3,14 @@ import { collection, query, addDoc, serverTimestamp, orderBy, db, onSnapshot } f
 import { Loader2, Plus, Clock, KeySquare, Calendar, CheckCircle2, ChevronDown, PenTool, Eraser } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM, formatDynamicTime } from '../lib/utils';
+import { formatDate, formatTime, getTodayYYYYMMDD, getHHMM } from '../lib/utils';
 import SignatureCanvas from 'react-signature-canvas';
 import { AlertModal } from '../components/ui/AlertModal';
 import { useAlert } from '../hooks/useAlert';
 
 // --- Image Placeholders ---
-const cdmLogo = '/logo/images/cdmlogo.png';
-const osaLogo = '/logo/images/osalogo.png';
+import cdmLogo from '../logo/images/cdmlogo.png';
+import osaLogo from '../logo/images/osalogo.png';
 
 // --- Types ---
 type Task = {
@@ -403,7 +403,7 @@ export default function Portal() {
                                     </div>
                                     <div className="flex items-center gap-3 text-[#a1a1a1] text-[10px] uppercase font-bold">
                                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatTime(t.startTime)} - {formatTime(t.endTime)}</span>
-                                      <span className={isFull ? 'text-[#a1a1a1]' : 'text-[#3ecf8e]'}>{formatDynamicTime(Number(t.duration) * 3600)}</span>
+                                      <span className={isFull ? 'text-[#a1a1a1]' : 'text-[#3ecf8e]'}>{t.duration.toFixed(1)} {Number(t.duration) === 1 ? 'hr' : 'hrs'}</span>
                                     </div>
                                   </button>
                                 );
@@ -423,7 +423,7 @@ export default function Portal() {
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div><div className="text-[9px] uppercase font-bold text-[#a1a1a1] mb-1">Time In</div><div className="text-sm font-mono">{formatTime(selectedTask.startTime)}</div></div>
                   <div><div className="text-[9px] uppercase font-bold text-[#a1a1a1] mb-1">Time Out</div><div className="text-sm font-mono">{formatTime(selectedTask.endTime)}</div></div>
-                  <div><div className="text-[9px] uppercase font-bold text-[#a1a1a1] mb-1">Duration</div><div className="text-sm font-bold text-[#3ecf8e]">{formatDynamicTime(Number(selectedTask.duration) * 3600)}</div></div>
+                  <div><div className="text-[9px] uppercase font-bold text-[#a1a1a1] mb-1">Duration</div><div className="text-sm font-bold text-[#3ecf8e]">{selectedTask.duration.toFixed(1)} {Number(selectedTask.duration) === 1 ? 'hr' : 'hrs'}</div></div>
                 </div>
                 <div className="pt-2 border-t border-[#2e2e2e] flex justify-between items-center text-sm">
                    <div className="text-[9px] uppercase font-bold text-[#a1a1a1]">Authorized Staff</div>
