@@ -262,7 +262,6 @@ export default function Staff() {
     try {
       await updateDoc(doc(db, 'admins', user.uid), {
         displayName: profileForm.displayName,
-        role: profileForm.role,
         updatedAt: serverTimestamp()
       });
       showAlert('Success', 'Profile updated successfully!', 'success');
@@ -1220,33 +1219,10 @@ export default function Staff() {
                              </div>
                           </td>
                            <td className="px-6 py-4">
-                             {(members.find(usr => usr.id === user?.uid)?.role === 'developer' || 
-                               (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
-                               <select
-                                 value={m.role}
-                                 onChange={async (e) => {
-                                   const newRole = e.target.value as AdminMember['role'];
-                                   try {
-                                     await updateDoc(doc(db, 'admins', m.id), { role: newRole });
-                                     setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
-                                     showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
-                                   } catch (err) {
-                                     showAlert('Error', 'Failed to update user role.', 'error');
-                                   }
-                                 }}
-                                 className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
-                               >
-                                  <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
-                                  <option value="admin" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer' && members.find(usr => usr.id === user?.uid)?.role !== 'admin'}>Administrator</option>
-                                  <option value="staff">Staff/Faculty</option>
-                                  <option value="student_assistant">Student Assistant</option>
-                               </select>
-                             ) : (
                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
                                  {m.role?.replace('_', ' ')}
                                </span>
-                             )}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-[#a1a1a1] text-xs">
                              {m.lastLogin ? formatDate(new Date(m.lastLogin).toISOString()) : 'Never'}
                           </td>
@@ -1290,32 +1266,9 @@ export default function Staff() {
                      </div>
                      <div className="flex justify-between flex-wrap gap-2 items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
                        <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">System Role</span>
-                       {(members.find(usr => usr.id === user?.uid)?.role === 'developer' || 
-                         (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
-                         <select
-                           value={m.role}
-                           onChange={async (e) => {
-                             const newRole = e.target.value as AdminMember['role'];
-                             try {
-                               await updateDoc(doc(db, 'admins', m.id), { role: newRole });
-                               setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
-                               showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
-                             } catch (err) {
-                               showAlert('Error', 'Failed to update user role.', 'error');
-                             }
-                           }}
-                           className="bg-[#171717] border border-[#3e3e3e] rounded text-xs px-2 py-1.5 outline-none focus:border-[#3ecf8e] text-[#ededed] max-w-[140px]"
-                         >
-                            <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
-                            <option value="admin" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer' && members.find(usr => usr.id === user?.uid)?.role !== 'admin'}>Administrator</option>
-                            <option value="staff">Staff/Faculty</option>
-                            <option value="student_assistant">Student Assistant</option>
-                         </select>
-                       ) : (
-                         <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
-                           {m.role?.replace('_', ' ')}
-                         </span>
-                       )}
+                       <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
+                         {m.role?.replace('_', ' ')}
+                       </span>
                      </div>
                    </div>
                  ))}
@@ -1349,17 +1302,11 @@ export default function Staff() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">System Role</label>
-                    <select 
-                      value={profileForm.role}
-                      onChange={e => setProfileForm({ ...profileForm, role: e.target.value as any })}
+                    <input 
+                      value={profileForm.role?.replace('_', ' ').toUpperCase() || 'N/A'}
                       disabled
-                      className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed outline-none"
-                    >
-                      <option value="developer">Developer</option>
-                      <option value="admin">Administrator</option>
-                      <option value="staff">Staff/Faculty</option>
-                      <option value="student_assistant">Student Assistant</option>
-                    </select>
+                      className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed uppercase font-bold tracking-widest"
+                    />
                     <p className="text-[9px] text-[#555] italic pt-1">Contact an administrator to change your system role.</p>
                   </div>
                   <div className="space-y-1">

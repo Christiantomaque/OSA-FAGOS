@@ -74,7 +74,7 @@ const LiveClock = ({ startTime, accumulatedSeconds = 0, scheduledEndTime, onTime
           {hrs.toString().padStart(2, '0')}:{mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}
         </span>
         <span className="text-[10px] font-bold text-[#a1a1a1] uppercase bg-[#262626] px-1.5 py-0.5 rounded border border-[#2e2e2e]">
-          {formatDynamicTime(totalSeconds)}
+          {formatDynamicTimeDisplay(totalSeconds)}
         </span>
       </div>
       {isAutoStopped && (
@@ -541,6 +541,42 @@ export default function Admin() {
       showAlert("Error", `Error saving task: ${e.message || 'Unknown error'}`, "error");
     } finally {
       setSubmittingTask(false);
+    }
+  };
+
+  const handleUpdateRole = async (targetId: string, newRole: AdminMember['role'], targetDisplayName: string, targetCurrentRole: AdminMember['role']) => {
+    const currentUserRole = members.find(usr => usr.id === user?.uid)?.role;
+    if (!currentUserRole) return;
+
+    // 1. Hierarchy Locks
+    if (currentUserRole === 'staff' || currentUserRole === 'student_assistant') {
+      showAlert('Error', 'You do not have permission to manage roles.', 'error');
+      return;
+    }
+
+    if (currentUserRole === 'admin') {
+      if (targetCurrentRole === 'developer') {
+        showAlert('Error', 'Administrators cannot modify Developer accounts.', 'error');
+        return;
+      }
+      if (targetCurrentRole === 'admin' && targetId !== user?.uid) {
+         showAlert('Error', 'Administrators cannot modify other Administrator accounts.', 'error');
+         return;
+      }
+      if (newRole === 'developer') {
+        showAlert('Error', 'Administrators cannot promote accounts to Developer.', 'error');
+        return;
+      }
+    }
+
+    // Developer can do anything
+
+    try {
+      await updateDoc(doc(db, 'admins', targetId), { role: newRole, updatedAt: serverTimestamp() });
+      setMembers(prev => prev.map(member => member.id === targetId ? { ...member, role: newRole } : member));
+      showAlert('Success', `${targetDisplayName}'s role updated to ${newRole.replace('_', ' ').toUpperCase()}`, 'success');
+    } catch (err) {
+      showAlert('Error', 'Failed to update user role.', 'error');
     }
   };
 
@@ -2168,16 +2204,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                                (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
                                <select
                                  value={m.role}
-                                 onChange={async (e) => {
-                                   const newRole = e.target.value as AdminMember['role'];
-                                   try {
-                                     await updateDoc(doc(db, 'admins', m.id), { role: newRole });
-                                     setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
-                                     showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
-                                   } catch (err) {
-                                     showAlert('Error', 'Failed to update user role.', 'error');
-                                   }
-                                 }}
+                                 onChange={(e) => handleUpdateRole(m.id, e.target.value as AdminMember['role'], m.displayName, m.role)}
                                  className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
                                >
                                   <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
@@ -2238,16 +2265,7 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                          (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
                          <select
                            value={m.role}
-                           onChange={async (e) => {
-                             const newRole = e.target.value as AdminMember['role'];
-                             try {
-                               await updateDoc(doc(db, 'admins', m.id), { role: newRole });
-                               setMembers(prev => prev.map(member => member.id === m.id ? { ...member, role: newRole } : member));
-                               showAlert('Success', `${m.displayName}'s role updated to ${newRole.replace('_', ' ')}`, 'success');
-                             } catch (err) {
-                               showAlert('Error', 'Failed to update user role.', 'error');
-                             }
-                           }}
+                           onChange={(e) => handleUpdateRole(m.id, e.target.value as AdminMember['role'], m.displayName, m.role)}
                            className="bg-[#171717] border border-[#3e3e3e] rounded text-xs px-2 py-1.5 outline-none focus:border-[#3ecf8e] text-[#ededed] max-w-[140px]"
                          >
                             <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
@@ -2293,17 +2311,11 @@ const handleApproveCompletion = async (student: StudentProgress) => {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">System Role</label>
-                    <select 
-                      value={profileForm.role}
-                      onChange={e => setProfileForm({ ...profileForm, role: e.target.value as any })}
+                    <input 
+                      value={profileForm.role?.replace('_', ' ').toUpperCase() || 'N/A'}
                       disabled
-                      className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed outline-none"
-                    >
-                      <option value="developer">Developer</option>
-                      <option value="admin">Administrator</option>
-                      <option value="staff">Staff/Faculty</option>
-                      <option value="student_assistant">Student Assistant</option>
-                    </select>
+                      className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed uppercase font-bold tracking-widest"
+                    />
                     <p className="text-[9px] text-[#555] italic pt-1">Contact an administrator to change your system role.</p>
                   </div>
                   <div className="space-y-1">
