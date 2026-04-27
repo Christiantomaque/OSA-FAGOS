@@ -79,12 +79,23 @@ const initGlobalAuth = () => {
     });
 
     // Fire the initial state request (only once!)
-    supabase.auth.getUser().then(({ data: { user } }) => {
-        const u = firebaseUser(user);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = firebaseUser(session?.user);
         globalAuthState = { user: u, loaded: true };
         authListeners.forEach(cb => cb(u));
+        
+        if (session) {
+            supabase.auth.getUser().then(({ data: { user } }) => {
+                if (!user) {
+                    globalAuthState = { user: null, loaded: true };
+                    authListeners.forEach(cb => cb(null));
+                }
+            }).catch(err => {
+                console.warn("Global getUser error", err);
+            });
+        }
     }).catch(err => {
-        console.warn("Global getUser error", err);
+        console.warn("Global getSession error", err);
     });
 };
 

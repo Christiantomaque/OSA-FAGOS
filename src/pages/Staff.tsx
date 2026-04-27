@@ -199,8 +199,14 @@ export default function Staff() {
               () => navigate("/portal"),
             );
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error("Auth init error:", e);
+          showAlert(
+            "Connection Error",
+            "Failed to verify your permissions. Please try again or clear your site data. Error: " + (e.message || String(e)),
+            "error",
+            () => navigate("/login")
+          );
         }
       }
       setLoadingAuth(false);
