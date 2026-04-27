@@ -162,7 +162,7 @@ const mapToPg = (data: any) => {
     if (!data || typeof data !== 'object') return data;
     const res: any = {};
     for (const k of Object.keys(data)) {
-        res[k.toLowerCase()] = data[k];
+        res[k] = data[k]; // ✅ Send the exact camelCase key to Supabase
     }
     return res;
 };
@@ -179,13 +179,13 @@ const mapToCamel = (data: any) => {
 export const collection = (db: any, path: string) => ({ type: 'collection', path });
 export const doc = (db: any, path: string, id: string) => ({ type: 'doc', path, id });
 export const query = (coll: any, ...ops: any[]) => ({ ...coll, ops });
-export const orderBy = (field: string, direction: 'asc' | 'desc') => ({ type: 'orderBy', field: field.toLowerCase(), direction });
+export const orderBy = (field: string, direction: 'asc' | 'desc') => ({ type: 'orderBy', field: field, direction }); 
 
 export const getDocs = async (q: any): Promise<{ docs: any[], forEach: (cb: (doc: any) => void) => void }> => {
     let req = supabase.from(q.path).select('*');
     if (q.ops) {
         for (const op of q.ops) {
-            if (op.type === 'orderBy') req = req.order(op.field.toLowerCase(), { ascending: op.direction === 'asc' });
+            if (op.type === 'orderBy') req = req.order(op.field, { ascending: op.direction === 'asc' }); // ✅
         }
     }
     const { data, error } = await req;
