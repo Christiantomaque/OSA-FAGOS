@@ -3183,16 +3183,21 @@ export default function Admin() {
                   </div>
                   <button
                     onClick={handleToggleSignups}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"
+                    }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowSignups ? "translate-x-6" : "translate-x-1"}`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        allowSignups ? "translate-x-6" : "translate-x-1"
+                      }`}
                     />
                   </button>
                 </div>
               </div>
 
               <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+                {/* Desktop Table View */}
                 <div className="hidden md:block overflow-x-auto w-full">
                   <table className="min-w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
@@ -3204,30 +3209,198 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#2e2e2e]">
-                      {filteredMembers.map((m) => {
-                        let dateObj: Date | null = null;
-                        if (m.lastLogin) {
-                          const parsed =
-                            typeof m.lastLogin === "object" &&
-                            (m.lastLogin as any).toDate
-                              ? (m.lastLogin as any).toDate()
-                              : new Date(m.lastLogin);
-                          if (!isNaN(parsed.getTime())) dateObj = parsed;
-                        }
+                      {filteredMembers.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="px-6 py-10 text-center text-[#a1a1a1]"
+                          >
+                            No members found matching your search.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMembers.map((m) => {
+                          // ----------------------------------------------------------------
+                          // 1.  Parse lastLogin to a real Date (handles Supabase strings)
+                          // ----------------------------------------------------------------
+                          let dateObj: Date | null = null;
+                          if (m.lastLogin) {
+                            const parsed =
+                              typeof m.lastLogin === "object" &&
+                              (m.lastLogin as any).toDate
+                                ? (m.lastLogin as any).toDate() // Firestore (unlikely but safe)
+                                : new Date(m.lastLogin); // Supabase returns ISO string
+                            if (!isNaN(parsed.getTime())) dateObj = parsed;
+                          }
 
-                        // 🚨 REAL-TIME LOGIC: 2 Minute Window (120000ms) 🚨
-                        const dbOnline =
-                          (m as any).is_online ?? (m as any).isOnline;
-                        const isOnline =
-                          typeof dbOnline === "boolean"
-                            ? dbOnline
-                            : dateObj
-                              ? Math.abs(Date.now() - dateObj.getTime()) <
-                                120000
-                              : false;
+                          // ----------------------------------------------------------------
+                          // 2.  ONLINE / OFFLINE decision
+                          //     Prefer is_online from DB; otherwise use 2‑minute time window
+                          // ----------------------------------------------------------------
+                          const dbOnline = (m as any).is_online; // from your admins table
+                          let isOnline = false;
+                          if (typeof dbOnline === "boolean") {
+                            isOnline = dbOnline;
+                          } else if (dateObj) {
+                            // Only online if lastLogin is within 2 minutes AND not in the future
+                            const diff = Date.now() - dateObj.getTime();
+                            isOnline = diff > -30_000 && diff < 120_000;
+                          }
 
-                        let displayDate = "Never";
-                        if (dateObj) {
+                          // ----------------------------------------------------------------
+                          // 3.  Last Active display text (safe formatting)
+                          // ----------------------------------------------------------------
+                          let displayDate = "Never";
+                          if (dateObj) {
+                            try {
+                              const formatted = formatDate(
+                                dateObj.toISOString(),
+                              );
+                              displayDate =
+                                !formatted || /invalid/i.test(formatted)
+                                  ? dateObj.toLocaleString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                      hour12: true,
+                                    })
+                                  : formatted;
+                            } catch {
+                              displayDate = dateObj.toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                                hour12: true,
+                              });
+                            }
+                          }
+
+                          return (
+                            <tr key={m.id} className="hover:bg-[#1c1c1c]">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={`w-2 h-2 rounded-full ${
+                                      isOnline
+                                        ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]"
+                                        : "bg-[#a1a1a1]"
+                                    }`}
+                                  />
+                                  <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                                    {isOnline ? "Online" : "Offline"}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  {m.photoURL ? (
+                                    <img
+                                      src={m.photoURL}
+                                      alt=""
+                                      className="w-8 h-8 rounded-full border border-[#2e2e2e]"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                      {(m.displayName || "?")
+                                        .charAt(0)
+                                        .toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="font-bold text-[#ededed]">
+                                      {m.displayName || "User"}
+                                    </div>
+                                    <div className="text-[10px] text-[#a1a1a1]">
+                                      {m.email}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                {members.find((usr) => usr.id === user?.uid)
+                                  ?.role === "developer" ||
+                                (members.find((usr) => usr.id === user?.uid)
+                                  ?.role === "admin" &&
+                                  m.role !== "developer") ? (
+                                  <select
+                                    value={m.role}
+                                    onChange={(e) =>
+                                      handleUpdateRole(
+                                        m.id,
+                                        e.target.value as any,
+                                        m.displayName,
+                                        m.role,
+                                      )
+                                    }
+                                    className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none text-[#ededed]"
+                                  >
+                                    <option
+                                      value="developer"
+                                      disabled={
+                                        members.find(
+                                          (usr) => usr.id === user?.uid,
+                                        )?.role !== "developer"
+                                      }
+                                    >
+                                      Developer
+                                    </option>
+                                    <option value="admin">Administrator</option>
+                                    <option value="staff">Staff/Faculty</option>
+                                    <option value="student_assistant">
+                                      Student Assistant
+                                    </option>
+                                  </select>
+                                ) : (
+                                  <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/10 text-[#3ecf8e]">
+                                    {m.role?.replace("_", " ")}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-[#a1a1a1] text-xs">
+                                {displayDate}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View (same logic, adapted) */}
+                <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                  {filteredMembers.length === 0 ? (
+                    <div className="p-6 text-center text-[#a1a1a1] text-xs">
+                      No members found matching your search.
+                    </div>
+                  ) : (
+                    filteredMembers.map((m) => {
+                      // --- Duplicated logic (or extract a helper) ---
+                      let dateObj: Date | null = null;
+                      if (m.lastLogin) {
+                        const parsed =
+                          typeof m.lastLogin === "object" &&
+                          (m.lastLogin as any).toDate
+                            ? (m.lastLogin as any).toDate()
+                            : new Date(m.lastLogin);
+                        if (!isNaN(parsed.getTime())) dateObj = parsed;
+                      }
+
+                      const dbOnline = (m as any).is_online;
+                      let isOnline = false;
+                      if (typeof dbOnline === "boolean") {
+                        isOnline = dbOnline;
+                      } else if (dateObj) {
+                        const diff = Date.now() - dateObj.getTime();
+                        isOnline = diff > -30_000 && diff < 120_000;
+                      }
+
+                      let displayDate = "Never";
+                      if (dateObj) {
+                        try {
                           const formatted = formatDate(dateObj.toISOString());
                           displayDate =
                             !formatted || /invalid/i.test(formatted)
@@ -3239,94 +3412,76 @@ export default function Admin() {
                                   hour12: true,
                                 })
                               : formatted;
+                        } catch {
+                          displayDate = dateObj.toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          });
                         }
+                      }
 
-                        return (
-                          <tr key={m.id} className="hover:bg-[#1c1c1c]">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                      const initial = (m.displayName || m.email || "?")
+                        .charAt(0)
+                        .toUpperCase();
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="p-4 space-y-3 hover:bg-[#1c1c1c]"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              {m.photoURL ? (
+                                <img
+                                  src={m.photoURL}
+                                  alt=""
+                                  className="w-10 h-10 rounded-full border border-[#2e2e2e]"
                                 />
-                                <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                  {initial}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="font-bold text-[#ededed] truncate">
+                                  {m.displayName || "User"}
+                                </div>
+                                <div className="text-[10px] text-[#a1a1a1] truncate">
+                                  {m.email}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <div
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"
+                                  }`}
+                                />
+                                <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
                                   {isOnline ? "Online" : "Offline"}
                                 </span>
                               </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                {m.photoURL ? (
-                                  <img
-                                    src={m.photoURL}
-                                    alt=""
-                                    className="w-8 h-8 rounded-full border border-[#2e2e2e]"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                    {(m.displayName || "?")
-                                      .charAt(0)
-                                      .toUpperCase()}
-                                  </div>
-                                )}
-                                <div>
-                                  <div className="font-bold text-[#ededed]">
-                                    {m.displayName || "User"}
-                                  </div>
-                                  <div className="text-[10px] text-[#a1a1a1]">
-                                    {m.email}
-                                  </div>
-                                </div>
+                              <div className="text-[9px] text-[#666]">
+                                {displayDate}
                               </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {members.find((usr) => usr.id === user?.uid)
-                                ?.role === "developer" ||
-                              (members.find((usr) => usr.id === user?.uid)
-                                ?.role === "admin" &&
-                                m.role !== "developer") ? (
-                                <select
-                                  value={m.role}
-                                  onChange={(e) =>
-                                    handleUpdateRole(
-                                      m.id,
-                                      e.target.value as any,
-                                      m.displayName,
-                                      m.role,
-                                    )
-                                  }
-                                  className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none text-[#ededed]"
-                                >
-                                  <option
-                                    value="developer"
-                                    disabled={
-                                      members.find(
-                                        (usr) => usr.id === user?.uid,
-                                      )?.role !== "developer"
-                                    }
-                                  >
-                                    Developer
-                                  </option>
-                                  <option value="admin">Administrator</option>
-                                  <option value="staff">Staff/Faculty</option>
-                                  <option value="student_assistant">
-                                    Student Assistant
-                                  </option>
-                                </select>
-                              ) : (
-                                <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/10 text-[#3ecf8e]">
-                                  {m.role?.replace("_", " ")}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-[#a1a1a1] text-xs">
-                              {displayDate}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                            <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                              System Role
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/20 text-[#3ecf8e]">
+                              {m.role?.replace("_", " ")}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>

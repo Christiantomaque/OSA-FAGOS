@@ -8,6 +8,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error("SUPABASE ERROR: API Keys are missing. Check your .env file and restart your terminal.");
 }
 
+// 👇 EXPORT THESE TWO for App.tsx
+export { supabaseUrl, supabaseAnonKey };
+
 export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
 export const auth = supabase.auth;
 export const db = 'SUPABASE_INSTANCE';
@@ -61,6 +64,7 @@ export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void
         displayName: u.user_metadata?.full_name 
     } : null;
 
+    // Fix for Supabase v2: use getUser and onAuthStateChange correctly
     supabase.auth.getUser().then(({ data: { user } }) => cb(firebaseUser(user)));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         cb(firebaseUser(session?.user));
@@ -117,7 +121,6 @@ export const deleteDoc = async (docRef: any) => {
     if (error) throw error;
 };
 
-// THE FIX: This now accurately reads single documents (like Settings) vs full collections
 export const onSnapshot = (q: any, cb: (snapshot: any) => void) => {
     const isDoc = q.type === 'doc';
 
@@ -135,10 +138,8 @@ export const onSnapshot = (q: any, cb: (snapshot: any) => void) => {
         }
     };
 
-    // Initial Fetch
     fetchUpdate();
 
-    // Listen for live database changes
     const channel = supabase
         .channel(`public:${q.path}-changes-${Math.random().toString(36).substring(7)}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: q.path }, () => {

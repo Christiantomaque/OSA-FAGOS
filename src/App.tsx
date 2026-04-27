@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, doc, getDoc, setDoc, updateDoc, serverTimestamp, db, supabase, User } from './lib/supabase';
 import Portal from './pages/Portal';
@@ -9,6 +9,9 @@ import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
 import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertCircle } from 'lucide-react';
+
+// 👇 Import your Supabase URL and anon key from the same place you created the client
+import { supabaseUrl, supabaseAnonKey } from './lib/supabase';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
@@ -27,6 +30,68 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // ── Refs to hold current user id and access token for beforeunload ──
+  const userIdRef = useRef<string | null>(null);
+  const accessTokenRef = useRef<string | null>(null);
+
+  // ──────────────────────────────────────────────
+  // 1.  ONLINE / OFFLINE TRACKING (Supabase v2)
+  // ──────────────────────────────────────────────
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        userIdRef.current = session.user.id;
+        accessTokenRef.current = session.access_token;
+
+        await supabase
+          .from('admins')
+          .update({ is_online: true, lastLogin: new Date().toISOString() })
+          .eq('id', session.user.id);
+      }
+    });
+
+    // When the user closes the tab / browser, set them offline
+    const handleBeforeUnload = () => {
+      const uid = userIdRef.current;
+      const token = accessTokenRef.current;
+      if (uid && token) {
+        fetch(`${supabaseUrl}/rest/v1/admins?id=eq.${uid}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ is_online: false }),
+          keepalive: true,
+        });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      subscription?.unsubscribe();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  // Sign‑out helper that also sets is_online = false
+  const signOutWithOffline = useCallback(async () => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        await supabase.from('admins').update({ is_online: false }).eq('id', currentUser.id);
+      }
+    } catch (e) { /* ignore – just signing out anyway */ }
+    await supabase.auth.signOut();
+  }, []);
+
+  // ──────────────────────────────────────────────
+  // 2.  EXISTING AUTH LOGIC (MFA, ROLES, ETC.)
+  // ──────────────────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(null, async (u) => {
       if (isSyncing.current) return;
@@ -38,12 +103,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           const userDoc = await getDoc(doc(db, 'admins', u.uid));
           
           if (!userDoc.exists() && u.email !== 'christiantomaque18@gmail.com') {
-            // Check global settings
             const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
             const allowSignups = settingsSnap.exists() ? settingsSnap.data().allowSignups !== false : true;
             
             if (!allowSignups) {
-              // BOUNCE UNAUTHORIZED USER: Destroy session and send error to Login.tsx
               await supabase.auth.signOut();
               setUser(null);
               setMfaStatus('verified');
@@ -55,7 +118,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               });
               return;
             } else {
-              // Allowed: Create default profile so MFA knows they exist
               await setDoc(doc(db, 'admins', u.uid), {
                 email: u.email, displayName: u.displayName || 'User', role: 'staff', lastLogin: serverTimestamp()
               });
@@ -90,7 +152,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setFactorId(verifiedFactor.id);
               setMfaStatus('verify');
             } else {
-              // The 422 Collision Fix
               if (factorsData?.totp && factorsData.totp.length > 0) {
                 for (const factor of factorsData.totp) {
                   await supabase.auth.mfa.unenroll({ factorId: factor.id });
@@ -136,13 +197,17 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     
     if (userDoc.exists()) {
       role = userDoc.data().role || 'staff';
-      try { await updateDoc(doc(db, 'admins', u.uid), { lastLogin: serverTimestamp() }); } catch(e){}
+      try {
+        await supabase
+          .from('admins')
+          .update({ is_online: true, lastLogin: new Date().toISOString() })
+          .eq('id', u.uid);
+      } catch(e){}
     }
 
     const routes: Record<string, string> = { developer: '/developer', admin: '/admin', staff: '/staff', student_assistant: '/student-assistant' };
     const targetPath = routes[role] || '/staff';
     
-    // Intercept both the login page AND the root portal page
     if (location.pathname === '/login' || location.pathname === '/') {
       navigate(targetPath, { replace: true });
     }
@@ -233,7 +298,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             </button>
           </form>
 
-          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#555] hover:text-[#ededed] transition-colors uppercase font-bold tracking-widest">
+          <button
+            onClick={signOutWithOffline}
+            className="mt-6 text-[9px] text-[#555] hover:text-[#ededed] transition-colors uppercase font-bold tracking-widest"
+          >
             Sign out of account
           </button>
         </div>
