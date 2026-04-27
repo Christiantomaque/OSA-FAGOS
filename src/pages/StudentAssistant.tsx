@@ -81,8 +81,9 @@ type ServiceRecord = {
   taskId?: string;
   staffName?: string;
   creditHours: number;
-  status: "pending" | "verified" | "active";
+  status: "pending" | "verified" | "active" | "paused" | "auto_stopped";
   startTime?: any;
+  accumulated_seconds?: number;
   verifiedBy?: string;
   verifiedById?: string;
   verifierRole?: string;
@@ -575,28 +576,28 @@ export default function Staff() {
   const handleClockOut = async (record: ServiceRecord) => {
     try {
       const now = new Date();
-      const startTime = new Date(record.timeIn);
+      let deltaSeconds = 0;
+      let schEndObj: Date | null = null;
 
-      let durationHours =
-        (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-
-      // Late Penalty Logic
       if (record.scheduledEndTime) {
-        const schEndObj = new Date(record.scheduledEndTime);
-        if (
-          schEndObj.getTime() <=
-          (record.scheduledStartTime
-            ? new Date(record.scheduledStartTime).getTime()
-            : startTime.getTime())
-        ) {
-          schEndObj.setDate(schEndObj.getDate() + 1);
-        }
+         schEndObj = new Date(record.scheduledEndTime);
+         const startRef = record.scheduledStartTime ? new Date(record.scheduledStartTime) : (record.timeIn ? new Date(record.timeIn) : now);
+         if (schEndObj.getTime() <= startRef.getTime()) {
+           schEndObj.setDate(schEndObj.getDate() + 1);
+         }
+      }
 
-        if (now.getTime() > schEndObj.getTime()) {
-          durationHours =
-            (schEndObj.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+      const effectiveNow = schEndObj && now.getTime() > schEndObj.getTime() ? schEndObj : now;
+
+      if (record.startTime) {
+        const start = new Date(record.startTime);
+        if (effectiveNow.getTime() > start.getTime()) {
+           deltaSeconds = Math.floor((effectiveNow.getTime() - start.getTime()) / 1000);
         }
       }
+      
+      const newAccumulated = (record.accumulated_seconds || 0) + deltaSeconds;
+      let durationHours = newAccumulated / 3600;
 
       if (durationHours < 0) durationHours = 0;
 
@@ -608,6 +609,8 @@ export default function Staff() {
       await updateDoc(doc(db, "service_records", record.id), {
         timeOut: now.toISOString(),
         creditHours: creditHours,
+        accumulated_seconds: newAccumulated,
+        startTime: null,
         status: "pending", // Reset to pending for approval
         updatedAt: serverTimestamp(),
       });
@@ -1312,6 +1315,11 @@ export default function Staff() {
                                 {formatDate(r.date)} | {formatTime(r.timeIn)} -{" "}
                                 {formatTime(r.timeOut)}
                               </div>
+                              {(r.status === 'active' || r.status === 'paused') && r.startTime && (
+                                <div className="text-[9px] text-[#3ecf8e] font-mono mt-1 uppercase tracking-wide">
+                                  <span className="text-[#a1a1a1]">Actual Start:</span> {formatTime(new Date(r.startTime).toISOString())}
+                                </div>
+                              )}
                             </td>
                             <td className="px-6 py-4 text-center">
                               <span
@@ -1521,6 +1529,11 @@ export default function Staff() {
                               {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
                             </span>
                           </div>
+                          {(r.status === 'active' || r.status === 'paused') && r.startTime && (
+                            <div className="text-[9px] text-[#3ecf8e] font-mono mt-1 uppercase tracking-wide text-right">
+                              <span className="text-[#a1a1a1]">Actual Start:</span> {formatTime(new Date(r.startTime).toISOString())}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">

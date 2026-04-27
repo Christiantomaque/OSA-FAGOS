@@ -12,12 +12,18 @@ const LiveClock = ({
   onTimeUp?: () => void;
 }) => {
   const [totalSeconds, setTotalSeconds] = useState(accumulatedSeconds);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [isAutoStopped, setIsAutoStopped] = useState(false);
   const hasFired = useRef(false);
 
   useEffect(() => {
     if (!startTime) {
       setTotalSeconds(accumulatedSeconds);
+      if (scheduledEndTime) {
+         const endTarget = new Date(scheduledEndTime).getTime();
+         const rem = Math.floor((endTarget - Date.now()) / 1000);
+         setRemainingSeconds(rem > 0 ? rem : 0);
+      }
       return;
     }
 
@@ -36,6 +42,9 @@ const LiveClock = ({
 
     const updateClock = () => {
       const now = Date.now();
+
+      const rem = endTarget !== Infinity ? Math.floor((endTarget - now) / 1000) : null;
+      setRemainingSeconds(rem !== null && rem > 0 ? rem : 0);
 
       if (now >= endTarget) {
         const delta = Math.floor((endTarget - start) / 1000);
@@ -69,32 +78,40 @@ const LiveClock = ({
     onTimeUp,
   ]);
 
-  const formatDynamicTime = (secs: number) => {
-    if (secs < 60) return `${secs} SEC${secs !== 1 ? "S" : ""}`;
-    if (secs < 3600) {
-      const mins = Math.floor(secs / 60);
-      return `${mins} MIN${mins !== 1 ? "S" : ""}`;
-    }
-    const hrs = Number((secs / 3600).toFixed(1));
-    return `${hrs} HR${hrs !== 1 ? "S" : ""}`;
-  };
-
   const hrs = Math.floor(totalSeconds / 3600);
   const mins = Math.floor((totalSeconds % 3600) / 60);
   const secs = totalSeconds % 60;
 
+  let rHrs = 0; let rMins = 0; let rSecs = 0;
+  if (remainingSeconds !== null) {
+      rHrs = Math.floor(remainingSeconds / 3600);
+      rMins = Math.floor((remainingSeconds % 3600) / 60);
+      rSecs = remainingSeconds % 60;
+  }
+
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-2">
-        <span
-          className={`font-mono text-lg font-black tracking-tighter ${isAutoStopped ? "text-red-500" : "text-[#3ecf8e]"}`}
-        >
-          {hrs.toString().padStart(2, "0")}:{mins.toString().padStart(2, "0")}:
-          {secs.toString().padStart(2, "0")}
-        </span>
-        <span className="text-[10px] font-bold text-[#a1a1a1] uppercase bg-[#262626] px-1.5 py-0.5 rounded border border-[#2e2e2e]">
-          {formatDynamicTimeDisplay(totalSeconds)}
-        </span>
+      <div className="flex flex-col items-center gap-1">
+        {remainingSeconds !== null && !isAutoStopped ? (
+            <div className="flex flex-col items-center">
+               <span className="text-[9px] font-bold text-[#a1a1a1] uppercase tracking-widest mb-0.5">Remaining Time</span>
+               <span className="font-mono text-lg font-black tracking-tighter text-amber-500">
+                  {rHrs.toString().padStart(2, "0")}:{rMins.toString().padStart(2, "0")}:{rSecs.toString().padStart(2, "0")}
+               </span>
+            </div>
+        ) : (
+            <div className="flex items-center gap-2">
+              <span
+                className={`font-mono text-lg font-black tracking-tighter ${isAutoStopped ? "text-red-500" : "text-[#3ecf8e]"}`}
+              >
+                {hrs.toString().padStart(2, "0")}:{mins.toString().padStart(2, "0")}:
+                {secs.toString().padStart(2, "0")}
+              </span>
+              <span className="text-[10px] font-bold text-[#a1a1a1] uppercase bg-[#262626] px-1.5 py-0.5 rounded border border-[#2e2e2e]">
+                {formatDynamicTimeDisplay(totalSeconds)}
+              </span>
+            </div>
+        )}
       </div>
       {isAutoStopped && (
         <span className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 bg-red-500/10 px-2 py-0.5 rounded">
@@ -876,32 +893,27 @@ export default function Admin() {
     try {
       const now = new Date();
       let deltaSeconds = 0;
+      let schEndObj: Date | null = null;
+
+      if (record.scheduledEndTime) {
+         schEndObj = new Date(record.scheduledEndTime);
+         const startRef = record.scheduledStartTime ? new Date(record.scheduledStartTime) : (record.timeIn ? new Date(record.timeIn) : now);
+         if (schEndObj.getTime() <= startRef.getTime()) {
+           schEndObj.setDate(schEndObj.getDate() + 1);
+         }
+      }
+
+      const effectiveNow = schEndObj && now.getTime() > schEndObj.getTime() ? schEndObj : now;
+
       if (record.startTime) {
         const start = new Date(record.startTime);
-        deltaSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+        if (effectiveNow.getTime() > start.getTime()) {
+           deltaSeconds = Math.floor((effectiveNow.getTime() - start.getTime()) / 1000);
+        }
       }
+      
       const newAccumulated = (record.accumulated_seconds || 0) + deltaSeconds;
-
       let durationHours = newAccumulated / 3600;
-
-      // Late Penalty Logic
-      const startTimeObj = record.timeIn ? new Date(record.timeIn) : now;
-      if (record.scheduledEndTime) {
-        const schEndObj = new Date(record.scheduledEndTime);
-        if (
-          schEndObj.getTime() <=
-          (record.scheduledStartTime
-            ? new Date(record.scheduledStartTime).getTime()
-            : startTimeObj.getTime())
-        ) {
-          schEndObj.setDate(schEndObj.getDate() + 1);
-        }
-
-        if (now.getTime() > schEndObj.getTime()) {
-          durationHours =
-            (schEndObj.getTime() - startTimeObj.getTime()) / (1000 * 60 * 60);
-        }
-      }
 
       if (durationHours < 0) durationHours = 0;
       const creditHours = Math.max(
@@ -941,12 +953,18 @@ export default function Admin() {
           )?.endTime ||
           Date.now(),
       );
-      const startObj = new Date(
-        record.timeIn || record.startTime || Date.now(),
-      );
 
-      let durationHours =
-        (endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60);
+      let deltaSeconds = 0;
+      if (record.startTime) {
+         const start = new Date(record.startTime);
+         if (endObj.getTime() > start.getTime()) {
+             deltaSeconds = Math.floor((endObj.getTime() - start.getTime()) / 1000);
+         }
+      }
+
+      const newAccumulated = (record.accumulated_seconds || 0) + deltaSeconds;
+      let durationHours = newAccumulated / 3600;
+
       if (durationHours < 0) durationHours = 0;
       const creditHours = Math.max(
         0,
@@ -957,9 +975,7 @@ export default function Admin() {
       await updateDoc(doc(db, "service_records", record.id), {
         timeOut: endObj.toISOString(),
         creditHours: creditHours,
-        accumulated_seconds: Math.floor(
-          (endObj.getTime() - startObj.getTime()) / 1000,
-        ),
+        accumulated_seconds: newAccumulated,
         startTime: null,
         status: "pending", // <--- CRITICAL: Must be 'pending' so the Admin can manually click Approve
         updatedAt: serverTimestamp(),
@@ -2249,6 +2265,11 @@ export default function Admin() {
                                 {formatDate(r.date)} | {formatTime(r.timeIn)} -{" "}
                                 {formatTime(r.timeOut)}
                               </div>
+                              {(r.status === 'active' || r.status === 'paused') && r.startTime && (
+                                <div className="text-[9px] text-[#3ecf8e] font-mono mt-1 uppercase tracking-wide">
+                                  <span className="text-[#a1a1a1]">Actual Start:</span> {formatTime(new Date(r.startTime).toISOString())}
+                                </div>
+                              )}
                             </td>
                             <td className="px-6 py-4 text-center">
                               <span
@@ -2485,6 +2506,11 @@ export default function Admin() {
                               {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
                             </span>
                           </div>
+                          {(r.status === 'active' || r.status === 'paused') && r.startTime && (
+                            <div className="text-[9px] text-[#3ecf8e] font-mono mt-1 uppercase tracking-wide text-right">
+                              <span className="text-[#a1a1a1]">Actual Start:</span> {formatTime(new Date(r.startTime).toISOString())}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">
