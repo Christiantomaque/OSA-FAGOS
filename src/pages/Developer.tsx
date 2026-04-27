@@ -250,7 +250,7 @@ export default function Developer() {
               "Connection Error",
               "Failed to verify your permissions. Please try again or clear your site data. Error: " + (e.message || String(e)),
               "error",
-              () => navigate("/login")
+              () => window.location.reload()
              );
           }
         }

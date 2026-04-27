@@ -67,6 +67,19 @@ let globalAuthState: { user: User | null; loaded: boolean } = { user: null, load
 const authListeners = new Set<(user: User | null) => void>();
 
 let authInitStarted = false;
+
+const notifyListeners = (u: User | null) => {
+    // Only notify if we haven't loaded yet, or if the user changed
+    const userChanged = u?.uid !== globalAuthState.user?.uid;
+    const firstLoad = !globalAuthState.loaded;
+    
+    globalAuthState = { user: u, loaded: true };
+    
+    if (userChanged || firstLoad) {
+        authListeners.forEach(cb => cb(u));
+    }
+};
+
 const initGlobalAuth = () => {
     if (authInitStarted) return;
     authInitStarted = true;
@@ -74,34 +87,27 @@ const initGlobalAuth = () => {
     // Start background token refresh checking
     supabase.auth.onAuthStateChange((_event, session) => {
         const u = firebaseUser(session?.user);
-        globalAuthState = { user: u, loaded: true };
-        authListeners.forEach(cb => cb(u));
+        notifyListeners(u);
     });
 
     // Fire the initial state request (only once!)
     supabase.auth.getSession().then(({ data: { session } }) => {
         const u = firebaseUser(session?.user);
-        globalAuthState = { user: u, loaded: true };
-        authListeners.forEach(cb => cb(u));
+        notifyListeners(u);
         
         if (session) {
             supabase.auth.getUser().then(({ data: { user } }) => {
                 if (!user) {
-                    globalAuthState = { user: null, loaded: true };
-                    authListeners.forEach(cb => cb(null));
+                    notifyListeners(null);
                 }
             }).catch(err => {
                 console.warn("Global getUser error", err);
-                // On error, we still want to inform listeners so they don't hang
-                globalAuthState = { user: null, loaded: true };
-                authListeners.forEach(cb => cb(null));
+                notifyListeners(null);
             });
         }
     }).catch(err => {
         console.warn("Global getSession error", err);
-        // CRITICAL: Call listeners with null so the UI doesn't spin forever
-        globalAuthState = { user: null, loaded: true };
-        authListeners.forEach(cb => cb(null));
+        notifyListeners(null);
     });
 };
 
@@ -139,14 +145,41 @@ export const getDocs = async (q: any) => {
 };
 
 export const getDoc = async (docRef: any) => {
-    const { data, error } = await supabase.from(docRef.path).select('*').eq('id', docRef.id).maybeSingle();
-    if (error) throw error;
-    return { exists: () => !!data, data: () => data || {}, get: (field: string) => data?.[field] };
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const { data, error } = await supabase.from(docRef.path).select('*').eq('id', docRef.id).maybeSingle();
+            if (error) throw error;
+            return { exists: () => !!data, data: () => data || {}, get: (field: string) => data?.[field] };
+        } catch (error: any) {
+            if (error && error.message && error.message.includes('Lock') && retries > 1) {
+                retries--;
+                await new Promise(r => setTimeout(r, 500));
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw new Error("Max retries exceeded");
 };
 
 export const setDoc = async (docRef: any, data: any, options?: any) => {
-    const { error } = await supabase.from(docRef.path).upsert([{ id: docRef.id, ...data }]);
-    if (error) throw error;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const { error } = await supabase.from(docRef.path).upsert([{ id: docRef.id, ...data }]);
+            if (error) throw error;
+            return;
+        } catch (error: any) {
+            if (error && error.message && error.message.includes('Lock') && retries > 1) {
+                retries--;
+                await new Promise(r => setTimeout(r, 500));
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw new Error("Max retries exceeded");
 };
 
 export const addDoc = async (coll: any, data: any) => {
