@@ -25,12 +25,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const isSyncing = useRef(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(null, async (u) => {
       if (isSyncing.current) return;
       isSyncing.current = true;
-      const location = useLocation();
 
       try {
         if (u) {
