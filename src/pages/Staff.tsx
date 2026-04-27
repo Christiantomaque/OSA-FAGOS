@@ -1861,59 +1861,43 @@ export default function Staff() {
                   </thead>
                   <tbody className="divide-y divide-[#2e2e2e]">
                     {members.map((m) => {
-                      // ── 1. UNIFIED DATE PARSING ──
                       let dateObj: Date | null = null;
                       if (m.lastLogin) {
-                        const parsed =
-                          typeof m.lastLogin === "object" &&
-                          (m.lastLogin as any).toDate
-                            ? (m.lastLogin as any).toDate()
-                            : new Date(m.lastLogin);
+                        const parsed = new Date(m.lastLogin);
                         if (!isNaN(parsed.getTime())) dateObj = parsed;
                       }
 
-                      // ── 2. ROBUST ONLINE LOGIC ──
-                      // We check both naming conventions and fall back to 10-min window
-                      const manualOnline =
+                      // 🚨 REAL-TIME LOGIC: 2 Minute Window 🚨
+                      const dbOnline =
                         (m as any).is_online ?? (m as any).isOnline;
                       const isOnline =
-                        typeof manualOnline === "boolean"
-                          ? manualOnline
+                        typeof dbOnline === "boolean"
+                          ? dbOnline
                           : dateObj
-                            ? Math.abs(Date.now() - dateObj.getTime()) < 600000
+                            ? Math.abs(Date.now() - dateObj.getTime()) < 120000
                             : false;
 
-                      // ── 3. FAIL-SAFE DATE DISPLAY ──
                       let displayDate = "Never";
                       if (dateObj) {
-                        try {
-                          const formatted = formatDate(dateObj.toISOString());
-                          // If custom formatter returns "INVALID" or is null, use native JS
-                          displayDate =
-                            !formatted || /invalid/i.test(formatted)
-                              ? dateObj.toLocaleString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                  hour12: true,
-                                })
-                              : formatted;
-                        } catch (e) {
-                          displayDate = dateObj.toLocaleDateString();
-                        }
+                        const formatted = formatDate(dateObj.toISOString());
+                        displayDate =
+                          !formatted || /invalid/i.test(formatted)
+                            ? dateObj.toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                            : formatted;
                       }
-
-                      const initial = (m.displayName || m.email || "?")
-                        .charAt(0)
-                        .toUpperCase();
 
                       return (
                         <tr key={m.id} className="hover:bg-[#1c1c1c]">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <div
-                                className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                                className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`}
                               />
                               <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                                 {isOnline ? "Online" : "Offline"}
@@ -1927,11 +1911,12 @@ export default function Staff() {
                                   src={m.photoURL}
                                   alt=""
                                   className="w-8 h-8 rounded-full border border-[#2e2e2e]"
-                                  referrerPolicy="no-referrer"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                  {initial}
+                                <div className="w-8 h-8 rounded-full bg-[#262626] border flex items-center justify-center font-bold text-[#a1a1a1]">
+                                  {(m.displayName || "?")
+                                    .charAt(0)
+                                    .toUpperCase()}
                                 </div>
                               )}
                               <div>
@@ -1945,9 +1930,7 @@ export default function Staff() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/10 text-[#a1a1a1]`}
-                            >
+                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/10 text-[#a1a1a1]">
                               {m.role?.replace("_", " ")}
                             </span>
                           </td>
