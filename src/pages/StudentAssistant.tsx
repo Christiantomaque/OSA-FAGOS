@@ -211,7 +211,7 @@ export default function Staff() {
                "Connection Error",
                "Failed to verify your permissions. Please try again or clear your site data. Error: " + (e.message || String(e)),
                "error",
-               () => window.location.reload()
+               () => navigate("/login")
              );
           }
         }

@@ -126,31 +126,85 @@ export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void
 // 2. DATA SHIMS (CRUD) 
 // ==========================================
 
+const pgToCamelMap: Record<string, string> = {
+    displayname: 'displayName',
+    photourl: 'photoURL',
+    lastlogin: 'lastLogin',
+    createdat: 'createdAt',
+    updatedat: 'updatedAt',
+    studentno: 'studentNo',
+    approvername: 'approverName',
+    approverrole: 'approverRole',
+    approversignature: 'approverSignature',
+    approvedat: 'approvedAt',
+    studentname: 'studentName',
+    studentemail: 'studentEmail',
+    taskid: 'taskId',
+    tasktitle: 'taskTitle',
+    timein: 'timeIn',
+    timeout: 'timeOut',
+    credithours: 'creditHours',
+    studentsignature: 'studentSignature',
+    academicyear: 'academicYear',
+    staffname: 'staffName',
+    starttime: 'startTime',
+    verifiedby: 'verifiedBy',
+    verifiedbyid: 'verifiedById',
+    verifierrole: 'verifierRole',
+    verifiersignature: 'verifierSignature',
+    scheduledendtime: 'scheduledEndTime',
+    scheduledstarttime: 'scheduledStartTime',
+    allowsignups: 'allowSignups',
+    endtime: 'endTime'
+};
+
+const mapToPg = (data: any) => {
+    if (!data || typeof data !== 'object') return data;
+    const res: any = {};
+    for (const k of Object.keys(data)) {
+        res[k.toLowerCase()] = data[k];
+    }
+    return res;
+};
+
+const mapToCamel = (data: any) => {
+    if (!data || typeof data !== 'object') return data;
+    const res: any = {};
+    for (const k of Object.keys(data)) {
+        res[pgToCamelMap[k] || k] = data[k];
+    }
+    return res;
+};
+
 export const collection = (db: any, path: string) => ({ type: 'collection', path });
 export const doc = (db: any, path: string, id: string) => ({ type: 'doc', path, id });
 export const query = (coll: any, ...ops: any[]) => ({ ...coll, ops });
-export const orderBy = (field: string, direction: 'asc' | 'desc') => ({ type: 'orderBy', field, direction });
+export const orderBy = (field: string, direction: 'asc' | 'desc') => ({ type: 'orderBy', field: field.toLowerCase(), direction });
 
-export const getDocs = async (q: any) => {
+export const getDocs = async (q: any): Promise<{ docs: any[], forEach: (cb: (doc: any) => void) => void }> => {
     let req = supabase.from(q.path).select('*');
     if (q.ops) {
         for (const op of q.ops) {
-            if (op.type === 'orderBy') req = req.order(op.field, { ascending: op.direction === 'asc' });
+            if (op.type === 'orderBy') req = req.order(op.field.toLowerCase(), { ascending: op.direction === 'asc' });
         }
     }
     const { data, error } = await req;
     if (error) throw error;
-    const docs = (data || []).map((d: any) => ({ id: d.id, exists: () => true, data: () => d, get: (field: string) => d[field] }));
+    const docs = (data || []).map((d: any) => {
+        const mapped = mapToCamel(d);
+        return { id: d.id, exists: () => true, data: () => mapped, get: (field: string) => mapped[field] };
+    });
     return { docs, forEach: (cb: (doc: any) => void) => docs.forEach(cb) };
 };
 
-export const getDoc = async (docRef: any) => {
+export const getDoc = async (docRef: any): Promise<{ exists: () => boolean, data: () => any, get: (field: string) => any }> => {
     let retries = 3;
     while (retries > 0) {
         try {
             const { data, error } = await supabase.from(docRef.path).select('*').eq('id', docRef.id).maybeSingle();
             if (error) throw error;
-            return { exists: () => !!data, data: () => data || {}, get: (field: string) => data?.[field] };
+            const mapped = mapToCamel(data || {});
+            return { exists: () => !!data, data: () => mapped, get: (field: string) => mapped[field] };
         } catch (error: any) {
             if (error && error.message && error.message.includes('Lock') && retries > 1) {
                 retries--;
@@ -167,7 +221,7 @@ export const setDoc = async (docRef: any, data: any, options?: any) => {
     let retries = 3;
     while (retries > 0) {
         try {
-            const { error } = await supabase.from(docRef.path).upsert([{ id: docRef.id, ...data }]);
+            const { error } = await supabase.from(docRef.path).upsert([{ id: docRef.id, ...mapToPg(data) }]);
             if (error) throw error;
             return;
         } catch (error: any) {
@@ -183,13 +237,13 @@ export const setDoc = async (docRef: any, data: any, options?: any) => {
 };
 
 export const addDoc = async (coll: any, data: any) => {
-    const { data: res, error } = await supabase.from(coll.path).insert([data]).select().single();
+    const { data: res, error } = await supabase.from(coll.path).insert([mapToPg(data)]).select().single();
     if (error) throw error;
     return { id: res?.id };
 };
 
 export const updateDoc = async (docRef: any, data: any) => {
-    const { error } = await supabase.from(docRef.path).update(data).eq('id', docRef.id);
+    const { error } = await supabase.from(docRef.path).update(mapToPg(data)).eq('id', docRef.id);
     if (error) throw error;
 };
 
