@@ -3216,10 +3216,9 @@ export default function Admin() {
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // 🚨 FIX: Bulletproof Time Extractor for Desktop
+                          // 🚨 BULLETPROOF TIME EXTRACTION (DESKTOP) 🚨
                           let loginTime = 0;
                           let displayDate = "Never";
-
                           if (m.lastLogin) {
                             try {
                               const d =
@@ -3228,7 +3227,6 @@ export default function Admin() {
                                     ? m.lastLogin.toDate()
                                     : new Date(m.lastLogin.seconds * 1000)
                                   : new Date(m.lastLogin);
-
                               loginTime = d.getTime();
                               displayDate = isNaN(loginTime)
                                 ? "Just now"
@@ -3237,7 +3235,6 @@ export default function Admin() {
                               displayDate = "Just now";
                             }
                           }
-
                           const isOnline =
                             loginTime !== 0 && Date.now() - loginTime < 300000;
 
@@ -3350,10 +3347,9 @@ export default function Admin() {
                     </div>
                   ) : (
                     filteredMembers.map((m) => {
-                      // 🚨 FIX: Bulletproof Time Extractor for Mobile View
+                      // 🚨 BULLETPROOF TIME EXTRACTION (MOBILE) 🚨
                       let loginTime = 0;
                       let displayDate = "Never";
-
                       if (m.lastLogin) {
                         try {
                           const d =
@@ -3362,7 +3358,6 @@ export default function Admin() {
                                 ? m.lastLogin.toDate()
                                 : new Date(m.lastLogin.seconds * 1000)
                               : new Date(m.lastLogin);
-
                           loginTime = d.getTime();
                           displayDate = isNaN(loginTime)
                             ? "Just now"
@@ -3371,7 +3366,6 @@ export default function Admin() {
                           displayDate = "Just now";
                         }
                       }
-
                       const isOnline =
                         loginTime !== 0 && Date.now() - loginTime < 300000;
 
