@@ -2906,22 +2906,88 @@ export default function Developer() {
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // 🚨 THE DISKAR FIX: Bulletproof Time Processing
-                          const rawDate = m.lastLogin;
-                          let dateObj: Date | null = null;
-                          if (rawDate) {
-                            const d =
-                              typeof rawDate === "object" && rawDate.toDate
-                                ? rawDate.toDate()
-                                : new Date(rawDate);
-                            if (!isNaN(d.getTime())) dateObj = d;
+                          // ── ONLINE STATUS (live is_online if present, otherwise time-based) ──
+                          let isOnline = false;
+                          if (typeof (m as any).is_online === "boolean") {
+                            isOnline = (m as any).is_online;
+                          } else {
+                            // Fallback to 5‑minute window with direction check
+                            let dateObj: Date | null = null;
+                            try {
+                              if (m.lastLogin) {
+                                if (m.lastLogin instanceof Date) {
+                                  dateObj = m.lastLogin;
+                                } else if (
+                                  typeof m.lastLogin === "string" ||
+                                  typeof m.lastLogin === "number"
+                                ) {
+                                  const d = new Date(m.lastLogin);
+                                  if (!isNaN(d.getTime())) dateObj = d;
+                                }
+                              }
+                            } catch (_) {}
+                            if (dateObj && !isNaN(dateObj.getTime())) {
+                              const diff = Date.now() - dateObj.getTime();
+                              isOnline = diff > -30_000 && diff < 300_000;
+                            }
                           }
-                          const isOnline = dateObj
-                            ? Math.abs(Date.now() - dateObj.getTime()) < 300000
-                            : false;
-                          const displayDate = dateObj
-                            ? formatDate(dateObj.toISOString())
-                            : "Never";
+
+                          // ── LAST ACTIVE DISPLAY ──
+                          let dateObj: Date | null = null;
+                          try {
+                            if (m.lastLogin) {
+                              if (m.lastLogin instanceof Date) {
+                                dateObj = m.lastLogin;
+                              } else if (
+                                typeof m.lastLogin === "string" ||
+                                typeof m.lastLogin === "number"
+                              ) {
+                                const d = new Date(m.lastLogin);
+                                if (!isNaN(d.getTime())) dateObj = d;
+                              }
+                            }
+                          } catch (_) {}
+                          const isValid = dateObj && !isNaN(dateObj.getTime());
+                          let displayDate = "Never";
+                          if (isValid && dateObj) {
+                            try {
+                              const formatted = formatDate(
+                                dateObj.toISOString(),
+                              );
+                              if (
+                                !formatted ||
+                                formatted === "INVALID DATE" ||
+                                formatted.toUpperCase().includes("INVALID")
+                              ) {
+                                displayDate = dateObj.toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  },
+                                );
+                              } else {
+                                displayDate = formatted;
+                              }
+                            } catch (_) {
+                              displayDate = dateObj.toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                },
+                              );
+                            }
+                          }
+
                           const initial = (m.displayName || m.email || "?")
                             .charAt(0)
                             .toUpperCase();
@@ -2931,7 +2997,11 @@ export default function Developer() {
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
                                   <div
-                                    className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                                    className={`w-2 h-2 rounded-full ${
+                                      isOnline
+                                        ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]"
+                                        : "bg-[#a1a1a1]"
+                                    }`}
                                   />
                                   <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                                     {isOnline ? "Online" : "Offline"}
@@ -2963,7 +3033,6 @@ export default function Developer() {
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                {/* Developers have full control over all roles */}
                                 <select
                                   value={m.role}
                                   onChange={(e) =>
@@ -2993,104 +3062,6 @@ export default function Developer() {
                       )}
                     </tbody>
                   </table>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
-                  {filteredMembers.length === 0 ? (
-                    <div className="p-8 text-center text-[#a1a1a1] text-sm">
-                      No members found.
-                    </div>
-                  ) : (
-                    filteredMembers.map((m) => {
-                      const rawDate = m.lastLogin;
-                      let dateObj: Date | null = null;
-                      if (rawDate) {
-                        const d =
-                          typeof rawDate === "object" && rawDate.toDate
-                            ? rawDate.toDate()
-                            : new Date(rawDate);
-                        if (!isNaN(d.getTime())) dateObj = d;
-                      }
-                      const isOnline = dateObj
-                        ? Math.abs(Date.now() - dateObj.getTime()) < 300000
-                        : false;
-                      const displayDate = dateObj
-                        ? formatDate(dateObj.toISOString())
-                        : "Never";
-                      const initial = (m.displayName || m.email || "?")
-                        .charAt(0)
-                        .toUpperCase();
-
-                      return (
-                        <div
-                          key={m.id}
-                          className="p-4 space-y-4 hover:bg-[#1c1c1c]"
-                        >
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="flex items-center gap-3 overflow-hidden">
-                              {m.photoURL ? (
-                                <img
-                                  src={m.photoURL}
-                                  alt=""
-                                  className="w-10 h-10 rounded-full border border-[#2e2e2e]"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                  {initial}
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <div className="font-bold text-[#ededed] truncate">
-                                  {m.displayName || "Unnamed User"}
-                                </div>
-                                <div className="text-[10px] text-[#a1a1a1] truncate">
-                                  {m.email}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end shrink-0 gap-1">
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`}
-                                />
-                                <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
-                                  {isOnline ? "Online" : "Offline"}
-                                </span>
-                              </div>
-                              <div className="text-[9px] text-[#666]">
-                                {displayDate}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
-                            <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
-                              System Role
-                            </span>
-                            <select
-                              value={m.role}
-                              onChange={(e) =>
-                                handleUpdateRole(
-                                  m.id,
-                                  e.target.value as any,
-                                  m.displayName,
-                                  m.role,
-                                )
-                              }
-                              className="bg-[#171717] border border-[#3e3e3e] rounded text-xs px-2 py-1 outline-none text-[#ededed]"
-                            >
-                              <option value="developer">Developer</option>
-                              <option value="admin">Administrator</option>
-                              <option value="staff">Staff/Faculty</option>
-                              <option value="student_assistant">
-                                Student Assistant
-                              </option>
-                            </select>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
                 </div>
               </div>
             </div>

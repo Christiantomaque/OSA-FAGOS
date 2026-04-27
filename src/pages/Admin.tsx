@@ -3193,6 +3193,7 @@ export default function Admin() {
               </div>
 
               <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+                {/* Desktop Table View */}
                 <div className="hidden md:block overflow-x-auto w-full">
                   <table className="min-w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
@@ -3215,35 +3216,101 @@ export default function Admin() {
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // 🚨 THE "TRIPLE-CHECK" LOGIC 🚨
-                          const rawDate = m.lastLogin;
-                          let dateObj: Date | null = null;
-
-                          if (rawDate) {
-                            const d =
-                              typeof rawDate === "object" && rawDate.toDate
-                                ? rawDate.toDate()
-                                : new Date(rawDate);
-                            if (!isNaN(d.getTime())) dateObj = d;
+                          // ── ONLINE STATUS ──
+                          // Use dedicated field if exists; otherwise fall back to time-based
+                          let isOnline = false;
+                          if (typeof (m as any).is_online === "boolean") {
+                            isOnline = (m as any).is_online;
+                          } else {
+                            // Time-based fallback (handles old data)
+                            let dateObj: Date | null = null;
+                            try {
+                              if (m.lastLogin) {
+                                if (m.lastLogin instanceof Date) {
+                                  dateObj = m.lastLogin;
+                                } else if (
+                                  typeof m.lastLogin === "string" ||
+                                  typeof m.lastLogin === "number"
+                                ) {
+                                  const d = new Date(m.lastLogin);
+                                  if (!isNaN(d.getTime())) dateObj = d;
+                                }
+                              }
+                            } catch (_) {}
+                            if (dateObj && !isNaN(dateObj.getTime())) {
+                              const diff = Date.now() - dateObj.getTime();
+                              // Only online if in the past (with 30s grace) and within 5 minutes
+                              isOnline = diff > -30_000 && diff < 300_000;
+                            }
                           }
 
-                          // online only if date is valid AND within 5 mins AND not in the future (clock drift)
-                          const isOnline = dateObj
-                            ? Math.abs(Date.now() - dateObj.getTime()) < 300000
-                            : false;
-                          const displayDate = dateObj
-                            ? formatDate(dateObj.toISOString())
-                            : "Never";
-                          const initial = (m.displayName || m.email || "?")
-                            .charAt(0)
-                            .toUpperCase();
+                          // ── LAST ACTIVE DISPLAY (robust parsing, Supabase strings) ──
+                          let dateObj: Date | null = null;
+                          try {
+                            if (m.lastLogin) {
+                              if (m.lastLogin instanceof Date) {
+                                dateObj = m.lastLogin;
+                              } else if (
+                                typeof m.lastLogin === "string" ||
+                                typeof m.lastLogin === "number"
+                              ) {
+                                const d = new Date(m.lastLogin);
+                                if (!isNaN(d.getTime())) dateObj = d;
+                              }
+                            }
+                          } catch (_) {}
+                          const isValid = dateObj && !isNaN(dateObj.getTime());
+                          let displayDate = "Never";
+                          if (isValid && dateObj) {
+                            try {
+                              const formatted = formatDate(
+                                dateObj.toISOString(),
+                              );
+                              // Guard against "INVALID DATE" from formatDate
+                              if (
+                                !formatted ||
+                                formatted === "INVALID DATE" ||
+                                formatted.toUpperCase().includes("INVALID")
+                              ) {
+                                displayDate = dateObj.toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  },
+                                );
+                              } else {
+                                displayDate = formatted;
+                              }
+                            } catch (_) {
+                              displayDate = dateObj.toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                },
+                              );
+                            }
+                          }
 
                           return (
                             <tr key={m.id} className="hover:bg-[#1c1c1c]">
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
                                   <div
-                                    className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                                    className={`w-2 h-2 rounded-full ${
+                                      isOnline
+                                        ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]"
+                                        : "bg-[#a1a1a1]"
+                                    }`}
                                   />
                                   <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                                     {isOnline ? "Online" : "Offline"}
@@ -3261,12 +3328,14 @@ export default function Admin() {
                                     />
                                   ) : (
                                     <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                      {initial}
+                                      {(m.displayName || m.email || "?")
+                                        .charAt(0)
+                                        .toUpperCase()}
                                     </div>
                                   )}
                                   <div>
                                     <div className="font-bold text-[#ededed]">
-                                      {m.displayName || "Unnamed User"}
+                                      {m.displayName || "User"}
                                     </div>
                                     <div className="text-[10px] text-[#a1a1a1]">
                                       {m.email}
@@ -3310,7 +3379,12 @@ export default function Admin() {
                                   </select>
                                 ) : (
                                   <span
-                                    className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === "admin" || m.role === "developer" ? "bg-[#3ecf8e]/20 text-[#3ecf8e]" : "bg-[#a1a1a1]/20 text-[#a1a1a1]"}`}
+                                    className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                                      m.role === "admin" ||
+                                      m.role === "developer"
+                                        ? "bg-[#3ecf8e]/20 text-[#3ecf8e]"
+                                        : "bg-[#a1a1a1]/20 text-[#a1a1a1]"
+                                    }`}
                                   >
                                     {m.role?.replace("_", " ")}
                                   </span>
@@ -3327,32 +3401,86 @@ export default function Admin() {
                   </table>
                 </div>
 
-                {/* Mobile Card View (Applying same atomic fix) */}
+                {/* Mobile Card View */}
                 <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
                   {filteredMembers.length === 0 ? (
-                    <div className="p-8 text-center text-[#a1a1a1] text-sm">
-                      No members found.
+                    <div className="p-6 text-center text-[#a1a1a1] text-xs">
+                      No members found matching your search.
                     </div>
                   ) : (
                     filteredMembers.map((m) => {
-                      const rawDate = m.lastLogin;
-                      let dateObj: Date | null = null;
-                      if (rawDate) {
-                        const d =
-                          typeof rawDate === "object" && rawDate.toDate
-                            ? rawDate.toDate()
-                            : new Date(rawDate);
-                        if (!isNaN(d.getTime())) dateObj = d;
+                      // ── ONLINE STATUS (same logic as desktop) ──
+                      let isOnline = false;
+                      if (typeof (m as any).is_online === "boolean") {
+                        isOnline = (m as any).is_online;
+                      } else {
+                        let dateObj: Date | null = null;
+                        try {
+                          if (m.lastLogin) {
+                            if (m.lastLogin instanceof Date) {
+                              dateObj = m.lastLogin;
+                            } else if (
+                              typeof m.lastLogin === "string" ||
+                              typeof m.lastLogin === "number"
+                            ) {
+                              const d = new Date(m.lastLogin);
+                              if (!isNaN(d.getTime())) dateObj = d;
+                            }
+                          }
+                        } catch (_) {}
+                        if (dateObj && !isNaN(dateObj.getTime())) {
+                          const diff = Date.now() - dateObj.getTime();
+                          isOnline = diff > -30_000 && diff < 300_000;
+                        }
                       }
-                      const isOnline = dateObj
-                        ? Math.abs(Date.now() - dateObj.getTime()) < 300000
-                        : false;
-                      const displayDate = dateObj
-                        ? formatDate(dateObj.toISOString())
-                        : "Never";
-                      const initial = (m.displayName || m.email || "?")
-                        .charAt(0)
-                        .toUpperCase();
+
+                      // ── LAST ACTIVE DISPLAY ──
+                      let dateObj: Date | null = null;
+                      try {
+                        if (m.lastLogin) {
+                          if (m.lastLogin instanceof Date) {
+                            dateObj = m.lastLogin;
+                          } else if (
+                            typeof m.lastLogin === "string" ||
+                            typeof m.lastLogin === "number"
+                          ) {
+                            const d = new Date(m.lastLogin);
+                            if (!isNaN(d.getTime())) dateObj = d;
+                          }
+                        }
+                      } catch (_) {}
+                      const isValid = dateObj && !isNaN(dateObj.getTime());
+                      let displayDate = "Never";
+                      if (isValid && dateObj) {
+                        try {
+                          const formatted = formatDate(dateObj.toISOString());
+                          if (
+                            !formatted ||
+                            formatted === "INVALID DATE" ||
+                            formatted.toUpperCase().includes("INVALID")
+                          ) {
+                            displayDate = dateObj.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                            });
+                          } else {
+                            displayDate = formatted;
+                          }
+                        } catch (_) {
+                          displayDate = dateObj.toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          });
+                        }
+                      }
 
                       return (
                         <div
@@ -3369,22 +3497,24 @@ export default function Admin() {
                                 />
                               ) : (
                                 <div className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                  {initial}
+                                  {(m.displayName || "?").charAt(0)}
                                 </div>
                               )}
                               <div className="min-w-0">
                                 <div className="font-bold text-[#ededed] truncate">
-                                  {m.displayName || "Unnamed User"}
+                                  {m.displayName || "User"}
                                 </div>
                                 <div className="text-[10px] text-[#a1a1a1] truncate">
                                   {m.email}
                                 </div>
                               </div>
                             </div>
-                            <div className="flex flex-col items-end gap-1">
+                            <div className="flex flex-col items-end shrink-0 gap-1">
                               <div className="flex items-center gap-1.5">
                                 <div
-                                  className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`}
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"
+                                  }`}
                                 />
                                 <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
                                   {isOnline ? "Online" : "Offline"}
