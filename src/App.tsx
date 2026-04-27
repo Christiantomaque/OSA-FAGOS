@@ -12,6 +12,7 @@ import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertCircle } from
 import { supabaseUrl, supabaseAnonKey } from './lib/supabase';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
+  const lastUid = useRef<string | undefined>(undefined);
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   
@@ -24,7 +25,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const isSyncing = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -42,7 +42,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         }
         return false;
       });
-    }, 10_000);
+    }, 30_000);
     return () => clearTimeout(timeout);
   }, []);
 
@@ -104,8 +104,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   // ─────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(null, async (u) => {
-      if (isSyncing.current) return;
-      isSyncing.current = true;
+      // Allow re-running if uid changes, or if we are just starting
+      if (typeof u?.uid === 'string' && lastUid.current === u.uid) {
+        setInitializing(false);
+        return;
+      }
+      
+      lastUid.current = u?.uid;
 
       try {
         if (u) {
@@ -121,7 +126,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               setUser(null);
               setMfaStatus('verified');
               setInitializing(false);
-              isSyncing.current = false;
               navigate('/login', { 
                 state: { authError: "Registration is not allowed at the moment. Please contact the admin." }, 
                 replace: true 
@@ -194,7 +198,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         setMfaStatus('verified');
       } finally {
         setInitializing(false);
-        isSyncing.current = false;
       }
     });
     return () => unsub();
