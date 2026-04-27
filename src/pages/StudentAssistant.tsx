@@ -1607,230 +1607,6 @@ export default function Staff() {
           </div>
         )}
 
-        {tab === "history" && (
-          <div className="space-y-8">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <History className="w-6 h-6 text-[#a1a1a1]" />
-              Task Execution History
-            </h2>
-            <div className="border border-[#2e2e2e] rounded-xl bg-[#171717] overflow-hidden w-full">
-              {/* Desktop View */}
-              <div className="hidden lg:block overflow-x-auto w-full">
-                <table className="min-w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-[#262626] text-[#a1a1a1] text-[10px] uppercase font-bold tracking-widest border-b border-[#2e2e2e]">
-                    <tr>
-                      <th className="px-6 py-4">Task Details</th>
-                      <th className="px-6 py-4">Publisher</th>
-                      <th className="px-6 py-4 text-center">Duration</th>
-                      <th className="px-6 py-4">Executors</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2e2e2e]">
-                    {historyTasks.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="p-10 text-center text-[#a1a1a1]"
-                        >
-                          No task history available
-                        </td>
-                      </tr>
-                    ) : (
-                      historyTasks.map((t) => (
-                        <tr key={t.id} className="hover:bg-[#1c1c1c]">
-                          <td className="px-6 py-4">
-                            <div className="font-bold">{t.title}</div>
-                            <div className="text-[10px] text-[#a1a1a1] font-mono">
-                              {formatDate(t.date)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-[#a1a1a1]">
-                            <div className="text-xs">{t.staffName}</div>
-                            <div className="text-[9px]">
-                              {formatTime(t.startTime)} -{" "}
-                              {formatTime(t.endTime)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-center font-bold text-[#3ecf8e]">
-                            {t.duration}h
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex -space-x-2">
-                              {records
-                                .filter(
-                                  (r) =>
-                                    r.taskTitle === t.title &&
-                                    r.date === t.date,
-                                )
-                                .slice(0, 3)
-                                .map((r, i) => (
-                                  <div
-                                    key={i}
-                                    className="w-6 h-6 rounded-full border border-[#171717] bg-[#2e2e2e] flex items-center justify-center text-[8px] font-bold"
-                                    title={r.studentName}
-                                  >
-                                    {r.studentName[0]}
-                                  </div>
-                                ))}
-                              {records.filter(
-                                (r) =>
-                                  r.taskTitle === t.title && r.date === t.date,
-                              ).length > 3 && (
-                                <div className="w-6 h-6 rounded-full border border-[#171717] bg-[#3ecf8e]/20 text-[#3ecf8e] flex items-center justify-center text-[8px] font-bold">
-                                  +
-                                  {records.filter(
-                                    (r) =>
-                                      r.taskTitle === t.title &&
-                                      r.date === t.date,
-                                  ).length - 3}
-                                </div>
-                              )}
-                              {records.filter(
-                                (r) =>
-                                  r.taskTitle === t.title && r.date === t.date,
-                              ).length === 0 && (
-                                <span className="text-[10px] italic text-[#666]">
-                                  No students
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex justify-end gap-1">
-                              {records.filter(
-                                (r) =>
-                                  r.taskTitle === t.title && r.date === t.date,
-                              ).length > 0 ? (
-                                <span className="text-[9px] text-[#555] uppercase font-bold italic">
-                                  Locked
-                                </span>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => handleEditTask(t)}
-                                    className="p-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors"
-                                    title="Edit Task"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteTask(t.id)}
-                                    className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors"
-                                    title="Delete Task"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Card View */}
-              <div className="lg:hidden flex flex-col divide-y divide-[#2e2e2e]">
-                {historyTasks.length === 0 ? (
-                  <div className="p-8 text-center text-[#a1a1a1] text-sm">
-                    No task history available.
-                  </div>
-                ) : (
-                  historyTasks.map((t) => {
-                    const executors = records.filter(
-                      (r) => r.taskTitle === t.title && r.date === t.date,
-                    );
-                    return (
-                      <div
-                        key={t.id}
-                        className="p-4 space-y-3 hover:bg-[#1c1c1c] transition-colors"
-                      >
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="min-w-0 flex-1">
-                            <div className="font-bold text-[#ededed] break-words">
-                              {t.title}
-                            </div>
-                            <div className="text-[10px] text-[#a1a1a1] uppercase font-mono mt-0.5">
-                              {formatDate(t.date)}
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-xs text-[#ededed]">
-                              {t.staffName}
-                            </div>
-                            <div className="text-[10px] text-[#a1a1a1]">
-                              {formatTime(t.startTime)} -{" "}
-                              {formatTime(t.endTime)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
-                              Duration
-                            </span>
-                            <span className="text-sm font-bold text-[#3ecf8e]">
-                              {t.duration}h
-                            </span>
-                          </div>
-
-                          <div className="flex -space-x-2">
-                            {executors.slice(0, 4).map((ex, i) => (
-                              <div
-                                key={i}
-                                className="w-6 h-6 rounded-full border border-[#1c1c1c] bg-[#2e2e2e] flex items-center justify-center text-[9px] font-bold"
-                                title={ex.studentName}
-                              >
-                                {ex.studentName.charAt(0)}
-                              </div>
-                            ))}
-                            {executors.length > 4 && (
-                              <div className="w-6 h-6 rounded-full border border-[#1c1c1c] bg-[#3ecf8e]/20 text-[#3ecf8e] flex items-center justify-center text-[9px] font-bold">
-                                +{executors.length - 4}
-                              </div>
-                            )}
-                            {executors.length === 0 && (
-                              <span className="text-[9px] italic text-[#666]">
-                                No students
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end pt-2 border-t border-[#2e2e2e]/50">
-                          {executors.length > 0 ? (
-                            <span className="text-[9px] text-[#555] uppercase font-bold italic">
-                              Locked
-                            </span>
-                          ) : (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleEditTask(t)}
-                                className="px-3 py-1.5 hover:bg-amber-500/10 text-amber-500 rounded transition-colors text-xs flex items-center gap-1 font-medium"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" /> Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteTask(t.id)}
-                                className="px-3 py-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors text-xs flex items-center gap-1 font-medium"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        )}
         {tab === "members" && (
           <div className="space-y-8 max-w-6xl">
             <div>
@@ -1843,7 +1619,6 @@ export default function Staff() {
             </div>
 
             <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
-              {/* Desktop Table View */}
               <div className="hidden md:block overflow-x-auto w-full">
                 <table className="min-w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
@@ -1866,30 +1641,28 @@ export default function Staff() {
                       </tr>
                     ) : (
                       members.map((m) => {
-                        // 🚨 BULLETPROOF TIME EXTRACTION (DESKTOP) 🚨
-                        let loginTime = 0;
-                        let displayDate = "Never";
-
+                        let dateObj = null;
                         if (m.lastLogin) {
-                          try {
-                            const d =
-                              typeof m.lastLogin === "object"
-                                ? m.lastLogin.toDate
-                                  ? m.lastLogin.toDate()
-                                  : new Date(m.lastLogin.seconds * 1000)
-                                : new Date(m.lastLogin);
-
-                            loginTime = d.getTime();
-                            displayDate = isNaN(loginTime)
-                              ? "Just now"
-                              : formatDate(d.toISOString());
-                          } catch (e) {
-                            displayDate = "Just now";
-                          }
+                          if (
+                            typeof m.lastLogin === "object" &&
+                            m.lastLogin.toDate
+                          )
+                            dateObj = m.lastLogin.toDate();
+                          else if (
+                            typeof m.lastLogin === "object" &&
+                            m.lastLogin.seconds
+                          )
+                            dateObj = new Date(m.lastLogin.seconds * 1000);
+                          else dateObj = new Date(m.lastLogin);
                         }
-
-                        const isOnline =
-                          loginTime !== 0 && Date.now() - loginTime < 300000;
+                        const isValid = dateObj && !isNaN(dateObj.getTime());
+                        const diff = isValid
+                          ? Date.now() - dateObj.getTime()
+                          : Infinity;
+                        const isOnline = isValid && diff >= 0 && diff < 300000;
+                        const displayDate = isValid
+                          ? formatDate(dateObj.toISOString())
+                          : "Never";
 
                         return (
                           <tr key={m.id} className="hover:bg-[#1c1c1c]">
@@ -1908,9 +1681,8 @@ export default function Staff() {
                                 {m.photoURL ? (
                                   <img
                                     src={m.photoURL}
-                                    alt={m.displayName}
+                                    alt=""
                                     className="w-8 h-8 rounded-full border border-[#2e2e2e]"
-                                    referrerPolicy="no-referrer"
                                   />
                                 ) : (
                                   <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
@@ -1943,97 +1715,6 @@ export default function Staff() {
                     )}
                   </tbody>
                 </table>
-              </div>
-
-              {/* Mobile Card View */}
-              <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
-                {members.length === 0 ? (
-                  <div className="p-8 text-center text-[#a1a1a1] text-sm">
-                    No members registered yet.
-                  </div>
-                ) : (
-                  members.map((m) => {
-                    // 🚨 BULLETPROOF TIME EXTRACTION (MOBILE) 🚨
-                    let loginTime = 0;
-                    let displayDate = "Never";
-
-                    if (m.lastLogin) {
-                      try {
-                        const d =
-                          typeof m.lastLogin === "object"
-                            ? m.lastLogin.toDate
-                              ? m.lastLogin.toDate()
-                              : new Date(m.lastLogin.seconds * 1000)
-                            : new Date(m.lastLogin);
-
-                        loginTime = d.getTime();
-                        displayDate = isNaN(loginTime)
-                          ? "Just now"
-                          : formatDate(d.toISOString());
-                      } catch (e) {
-                        displayDate = "Just now";
-                      }
-                    }
-
-                    const isOnline =
-                      loginTime !== 0 && Date.now() - loginTime < 300000;
-
-                    return (
-                      <div
-                        key={m.id}
-                        className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors"
-                      >
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="flex items-center gap-3 overflow-hidden">
-                            {m.photoURL ? (
-                              <img
-                                src={m.photoURL}
-                                alt={m.displayName}
-                                className="w-10 h-10 rounded-full border border-[#2e2e2e] shrink-0"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1] shrink-0">
-                                {m.displayName.charAt(0)}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="font-bold text-[#ededed] truncate">
-                                {m.displayName}
-                              </div>
-                              <div className="text-[10px] text-[#a1a1a1] truncate">
-                                {m.email}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end shrink-0 gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <div
-                                className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
-                              />
-                              <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
-                                {isOnline ? "Online" : "Offline"}
-                              </span>
-                            </div>
-                            <div className="text-[9px] text-[#666]">
-                              {displayDate}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex justify-between flex-wrap gap-2 items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
-                          <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
-                            System Role
-                          </span>
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === "admin" || m.role === "developer" ? "bg-[#3ecf8e]/20 text-[#3ecf8e]" : "bg-[#a1a1a1]/20 text-[#a1a1a1]"}`}
-                          >
-                            {m.role?.replace("_", " ")}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
               </div>
             </div>
           </div>
