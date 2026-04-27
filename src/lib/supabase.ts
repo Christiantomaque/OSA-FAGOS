@@ -92,10 +92,16 @@ const initGlobalAuth = () => {
                 }
             }).catch(err => {
                 console.warn("Global getUser error", err);
+                // On error, we still want to inform listeners so they don't hang
+                globalAuthState = { user: null, loaded: true };
+                authListeners.forEach(cb => cb(null));
             });
         }
     }).catch(err => {
         console.warn("Global getSession error", err);
+        // CRITICAL: Call listeners with null so the UI doesn't spin forever
+        globalAuthState = { user: null, loaded: true };
+        authListeners.forEach(cb => cb(null));
     });
 };
 

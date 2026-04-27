@@ -56,6 +56,7 @@ import {
 import { Link, Navigate, useNavigate } from "react-router-dom";
 
 import { AlertModal } from "../components/ui/AlertModal";
+import { SupabaseSetupModal } from "../components/ui/SupabaseSetupModal";
 import { useAlert } from "../hooks/useAlert";
 
 type Task = {
@@ -181,6 +182,8 @@ export default function Developer() {
   const navigate = useNavigate();
   const { modal, showAlert, hideAlert } = useAlert();
 
+  const [showDbSetup, setShowDbSetup] = useState(false);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
@@ -240,12 +243,16 @@ export default function Developer() {
           }
         } catch (e: any) {
           console.error("Auth routing init error", e);
-          showAlert(
-            "Connection Error",
-            "Failed to verify your permissions. Please try again or clear your site data. Error: " + (e.message || String(e)),
-            "error",
-            () => navigate("/login")
-          );
+          if (e.message?.includes("relation") && e.message?.includes("does not exist")) {
+             setShowDbSetup(true);
+          } else {
+             showAlert(
+              "Connection Error",
+              "Failed to verify your permissions. Please try again or clear your site data. Error: " + (e.message || String(e)),
+              "error",
+              () => navigate("/login")
+             );
+          }
         }
       }
       setLoadingAuth(false);
@@ -1233,8 +1240,9 @@ export default function Developer() {
   if (!authorized) {
     return (
       <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center">
+        <SupabaseSetupModal isOpen={showDbSetup} onClose={() => { setShowDbSetup(false); window.location.reload(); }} />
         <AlertModal {...modal} onClose={hideAlert} />
-        {!modal.isOpen && <Loader2 className="animate-spin text-[#3ecf8e]" />}
+        {!modal.isOpen && !showDbSetup && <Loader2 className="animate-spin text-[#3ecf8e]" />}
       </div>
     );
   }
