@@ -2860,8 +2860,8 @@ export default function Developer() {
 
               <div className="bg-[#1c1c1c] rounded-xl border border-[#2e2e2e] overflow-hidden p-6 mb-6">
                 <h3 className="text-[#ededed] font-medium mb-4 flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-[#3ecf8e]" />
-                  System Settings
+                  <Settings className="w-5 h-5 text-[#3ecf8e]" /> System
+                  Settings
                 </h3>
                 <div className="bg-[#171717] rounded-lg p-4 border border-[#2e2e2e] flex items-center justify-between gap-4">
                   <div className="min-w-0">
@@ -2869,13 +2869,12 @@ export default function Developer() {
                       System Registration
                     </h4>
                     <p className="text-xs text-[#a1a1a1]">
-                      Control whether new users can sign up for an account via
-                      the login screen.
+                      Control whether new users can sign up for an account.
                     </p>
                   </div>
                   <button
                     onClick={handleToggleSignups}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"}`}
                   >
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowSignups ? "translate-x-6" : "translate-x-1"}`}
@@ -2907,30 +2906,25 @@ export default function Developer() {
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // 🚨 FIX: Bulletproof Time Extractor
-                          let loginTime = 0;
-                          let displayDate = "Never";
-
-                          if (m.lastLogin) {
-                            try {
-                              const d =
-                                typeof m.lastLogin === "object"
-                                  ? m.lastLogin.toDate
-                                    ? m.lastLogin.toDate()
-                                    : new Date(m.lastLogin.seconds * 1000)
-                                  : new Date(m.lastLogin);
-
-                              loginTime = d.getTime();
-                              displayDate = isNaN(loginTime)
-                                ? "Just now"
-                                : formatDate(d.toISOString());
-                            } catch (e) {
-                              displayDate = "Just now";
-                            }
+                          // 🚨 THE DISKAR FIX: Bulletproof Time Processing
+                          const rawDate = m.lastLogin;
+                          let dateObj: Date | null = null;
+                          if (rawDate) {
+                            const d =
+                              typeof rawDate === "object" && rawDate.toDate
+                                ? rawDate.toDate()
+                                : new Date(rawDate);
+                            if (!isNaN(d.getTime())) dateObj = d;
                           }
-
-                          const isOnline =
-                            loginTime !== 0 && Date.now() - loginTime < 300000;
+                          const isOnline = dateObj
+                            ? Math.abs(Date.now() - dateObj.getTime()) < 300000
+                            : false;
+                          const displayDate = dateObj
+                            ? formatDate(dateObj.toISOString())
+                            : "Never";
+                          const initial = (m.displayName || m.email || "?")
+                            .charAt(0)
+                            .toUpperCase();
 
                           return (
                             <tr key={m.id} className="hover:bg-[#1c1c1c]">
@@ -2949,18 +2943,18 @@ export default function Developer() {
                                   {m.photoURL ? (
                                     <img
                                       src={m.photoURL}
-                                      alt={m.displayName}
+                                      alt=""
                                       className="w-8 h-8 rounded-full border border-[#2e2e2e]"
                                       referrerPolicy="no-referrer"
                                     />
                                   ) : (
                                     <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                      {m.displayName.charAt(0)}
+                                      {initial}
                                     </div>
                                   )}
                                   <div>
                                     <div className="font-bold text-[#ededed]">
-                                      {m.displayName}
+                                      {m.displayName || "Unnamed User"}
                                     </div>
                                     <div className="text-[10px] text-[#a1a1a1]">
                                       {m.email}
@@ -2969,42 +2963,26 @@ export default function Developer() {
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                {members.find((usr) => usr.id === user?.uid)
-                                  ?.role === "developer" ||
-                                (members.find((usr) => usr.id === user?.uid)
-                                  ?.role === "admin" &&
-                                  m.role !== "developer") ? (
-                                  <select
-                                    value={m.role}
-                                    onChange={(e) =>
-                                      handleUpdateRole(
-                                        m.id,
-                                        e.target.value as AdminMember["role"],
-                                        m.displayName,
-                                        m.role,
-                                      )
-                                    }
-                                    className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
-                                  >
-                                    {members.find((usr) => usr.id === user?.uid)
-                                      ?.role === "developer" && (
-                                      <option value="developer">
-                                        Developer
-                                      </option>
-                                    )}
-                                    <option value="admin">Administrator</option>
-                                    <option value="staff">Staff/Faculty</option>
-                                    <option value="student_assistant">
-                                      Student Assistant
-                                    </option>
-                                  </select>
-                                ) : (
-                                  <span
-                                    className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === "admin" || m.role === "developer" ? "bg-[#3ecf8e]/20 text-[#3ecf8e]" : "bg-[#a1a1a1]/20 text-[#a1a1a1]"}`}
-                                  >
-                                    {m.role?.replace("_", " ")}
-                                  </span>
-                                )}
+                                {/* Developers have full control over all roles */}
+                                <select
+                                  value={m.role}
+                                  onChange={(e) =>
+                                    handleUpdateRole(
+                                      m.id,
+                                      e.target.value as any,
+                                      m.displayName,
+                                      m.role,
+                                    )
+                                  }
+                                  className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
+                                >
+                                  <option value="developer">Developer</option>
+                                  <option value="admin">Administrator</option>
+                                  <option value="staff">Staff/Faculty</option>
+                                  <option value="student_assistant">
+                                    Student Assistant
+                                  </option>
+                                </select>
                               </td>
                               <td className="px-6 py-4 text-[#a1a1a1] text-xs">
                                 {displayDate}
@@ -3021,57 +2999,50 @@ export default function Developer() {
                 <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
                   {filteredMembers.length === 0 ? (
                     <div className="p-8 text-center text-[#a1a1a1] text-sm">
-                      No members found matching your search.
+                      No members found.
                     </div>
                   ) : (
                     filteredMembers.map((m) => {
-                      // 🚨 FIX: Bulletproof Time Extractor
-                      let loginTime = 0;
-                      let displayDate = "Never";
-
-                      if (m.lastLogin) {
-                        try {
-                          const d =
-                            typeof m.lastLogin === "object"
-                              ? m.lastLogin.toDate
-                                ? m.lastLogin.toDate()
-                                : new Date(m.lastLogin.seconds * 1000)
-                              : new Date(m.lastLogin);
-
-                          loginTime = d.getTime();
-                          displayDate = isNaN(loginTime)
-                            ? "Just now"
-                            : formatDate(d.toISOString());
-                        } catch (e) {
-                          displayDate = "Just now";
-                        }
+                      const rawDate = m.lastLogin;
+                      let dateObj: Date | null = null;
+                      if (rawDate) {
+                        const d =
+                          typeof rawDate === "object" && rawDate.toDate
+                            ? rawDate.toDate()
+                            : new Date(rawDate);
+                        if (!isNaN(d.getTime())) dateObj = d;
                       }
-
-                      const isOnline =
-                        loginTime !== 0 && Date.now() - loginTime < 300000;
+                      const isOnline = dateObj
+                        ? Math.abs(Date.now() - dateObj.getTime()) < 300000
+                        : false;
+                      const displayDate = dateObj
+                        ? formatDate(dateObj.toISOString())
+                        : "Never";
+                      const initial = (m.displayName || m.email || "?")
+                        .charAt(0)
+                        .toUpperCase();
 
                       return (
                         <div
                           key={m.id}
-                          className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors"
+                          className="p-4 space-y-4 hover:bg-[#1c1c1c]"
                         >
                           <div className="flex justify-between items-start gap-4">
                             <div className="flex items-center gap-3 overflow-hidden">
                               {m.photoURL ? (
                                 <img
                                   src={m.photoURL}
-                                  alt={m.displayName}
-                                  className="w-10 h-10 rounded-full border border-[#2e2e2e] shrink-0"
-                                  referrerPolicy="no-referrer"
+                                  alt=""
+                                  className="w-10 h-10 rounded-full border border-[#2e2e2e]"
                                 />
                               ) : (
-                                <div className="w-10 h-10 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1] shrink-0">
-                                  {m.displayName.charAt(0)}
+                                <div className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                  {initial}
                                 </div>
                               )}
                               <div className="min-w-0">
                                 <div className="font-bold text-[#ededed] truncate">
-                                  {m.displayName}
+                                  {m.displayName || "Unnamed User"}
                                 </div>
                                 <div className="text-[10px] text-[#a1a1a1] truncate">
                                   {m.email}
@@ -3081,7 +3052,7 @@ export default function Developer() {
                             <div className="flex flex-col items-end shrink-0 gap-1">
                               <div className="flex items-center gap-1.5">
                                 <div
-                                  className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                                  className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`}
                                 />
                                 <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
                                   {isOnline ? "Online" : "Offline"}
@@ -3092,44 +3063,29 @@ export default function Developer() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex justify-between flex-wrap gap-2 items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                          <div className="flex justify-between items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
                             <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                               System Role
                             </span>
-                            {members.find((usr) => usr.id === user?.uid)
-                              ?.role === "developer" ||
-                            (members.find((usr) => usr.id === user?.uid)
-                              ?.role === "admin" &&
-                              m.role !== "developer") ? (
-                              <select
-                                value={m.role}
-                                onChange={(e) =>
-                                  handleUpdateRole(
-                                    m.id,
-                                    e.target.value as AdminMember["role"],
-                                    m.displayName,
-                                    m.role,
-                                  )
-                                }
-                                className="bg-[#171717] border border-[#3e3e3e] rounded text-xs px-2 py-1.5 outline-none focus:border-[#3ecf8e] text-[#ededed] max-w-[140px]"
-                              >
-                                {members.find((usr) => usr.id === user?.uid)
-                                  ?.role === "developer" && (
-                                  <option value="developer">Developer</option>
-                                )}
-                                <option value="admin">Administrator</option>
-                                <option value="staff">Staff/Faculty</option>
-                                <option value="student_assistant">
-                                  Student Assistant
-                                </option>
-                              </select>
-                            ) : (
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === "admin" || m.role === "developer" ? "bg-[#3ecf8e]/20 text-[#3ecf8e]" : "bg-[#a1a1a1]/20 text-[#a1a1a1]"}`}
-                              >
-                                {m.role?.replace("_", " ")}
-                              </span>
-                            )}
+                            <select
+                              value={m.role}
+                              onChange={(e) =>
+                                handleUpdateRole(
+                                  m.id,
+                                  e.target.value as any,
+                                  m.displayName,
+                                  m.role,
+                                )
+                              }
+                              className="bg-[#171717] border border-[#3e3e3e] rounded text-xs px-2 py-1 outline-none text-[#ededed]"
+                            >
+                              <option value="developer">Developer</option>
+                              <option value="admin">Administrator</option>
+                              <option value="staff">Staff/Faculty</option>
+                              <option value="student_assistant">
+                                Student Assistant
+                              </option>
+                            </select>
                           </div>
                         </div>
                       );
@@ -3186,9 +3142,6 @@ export default function Developer() {
                         disabled
                         className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed uppercase font-bold tracking-widest"
                       />
-                      <p className="text-[9px] text-[#555] italic pt-1">
-                        Contact an administrator to change your system role.
-                      </p>
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">

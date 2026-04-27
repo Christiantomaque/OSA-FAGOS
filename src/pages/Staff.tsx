@@ -1872,30 +1872,28 @@ export default function Staff() {
                       </tr>
                     ) : (
                       members.map((m) => {
-                        // 🚨 FIX: Bulletproof Time Extractor
-                        let loginTime = 0;
-                        let displayDate = "Never";
+                        // 🚨 THE DISKAR ATOMIC FIX 🚨
+                        const rawDate = m.lastLogin;
+                        let dateObj: Date | null = null;
 
-                        if (m.lastLogin) {
-                          try {
-                            const d =
-                              typeof m.lastLogin === "object"
-                                ? m.lastLogin.toDate
-                                  ? m.lastLogin.toDate()
-                                  : new Date(m.lastLogin.seconds * 1000)
-                                : new Date(m.lastLogin);
-
-                            loginTime = d.getTime();
-                            displayDate = isNaN(loginTime)
-                              ? "Just now"
-                              : formatDate(d.toISOString());
-                          } catch (e) {
-                            displayDate = "Just now";
-                          }
+                        if (rawDate) {
+                          const d =
+                            typeof rawDate === "object" && rawDate.toDate
+                              ? rawDate.toDate()
+                              : new Date(rawDate);
+                          if (!isNaN(d.getTime())) dateObj = d;
                         }
 
-                        const isOnline =
-                          loginTime !== 0 && Date.now() - loginTime < 300000;
+                        // Online only if date is valid AND within 5 mins window (Math.abs handles clock drift)
+                        const isOnline = dateObj
+                          ? Math.abs(Date.now() - dateObj.getTime()) < 300000
+                          : false;
+                        const displayDate = dateObj
+                          ? formatDate(dateObj.toISOString())
+                          : "Never";
+                        const initial = (m.displayName || m.email || "?")
+                          .charAt(0)
+                          .toUpperCase();
 
                         return (
                           <tr key={m.id} className="hover:bg-[#1c1c1c]">
@@ -1914,18 +1912,18 @@ export default function Staff() {
                                 {m.photoURL ? (
                                   <img
                                     src={m.photoURL}
-                                    alt={m.displayName}
+                                    alt=""
                                     className="w-8 h-8 rounded-full border border-[#2e2e2e]"
                                     referrerPolicy="no-referrer"
                                   />
                                 ) : (
                                   <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                    {m.displayName.charAt(0)}
+                                    {initial}
                                   </div>
                                 )}
                                 <div>
                                   <div className="font-bold text-[#ededed]">
-                                    {m.displayName}
+                                    {m.displayName || "Unnamed Staff"}
                                   </div>
                                   <div className="text-[10px] text-[#a1a1a1]">
                                     {m.email}
@@ -1959,53 +1957,46 @@ export default function Staff() {
                   </div>
                 ) : (
                   members.map((m) => {
-                    // 🚨 FIX: Bulletproof Time Extractor for Mobile View
-                    let loginTime = 0;
-                    let displayDate = "Never";
-
-                    if (m.lastLogin) {
-                      try {
-                        const d =
-                          typeof m.lastLogin === "object"
-                            ? m.lastLogin.toDate
-                              ? m.lastLogin.toDate()
-                              : new Date(m.lastLogin.seconds * 1000)
-                            : new Date(m.lastLogin);
-
-                        loginTime = d.getTime();
-                        displayDate = isNaN(loginTime)
-                          ? "Just now"
-                          : formatDate(d.toISOString());
-                      } catch (e) {
-                        displayDate = "Just now";
-                      }
+                    const rawDate = m.lastLogin;
+                    let dateObj: Date | null = null;
+                    if (rawDate) {
+                      const d =
+                        typeof rawDate === "object" && rawDate.toDate
+                          ? rawDate.toDate()
+                          : new Date(rawDate);
+                      if (!isNaN(d.getTime())) dateObj = d;
                     }
-
-                    const isOnline =
-                      loginTime !== 0 && Date.now() - loginTime < 300000;
+                    const isOnline = dateObj
+                      ? Math.abs(Date.now() - dateObj.getTime()) < 300000
+                      : false;
+                    const displayDate = dateObj
+                      ? formatDate(dateObj.toISOString())
+                      : "Never";
+                    const initial = (m.displayName || m.email || "?")
+                      .charAt(0)
+                      .toUpperCase();
 
                     return (
                       <div
                         key={m.id}
-                        className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors"
+                        className="p-4 space-y-4 hover:bg-[#1c1c1c]"
                       >
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex items-center gap-3 overflow-hidden">
                             {m.photoURL ? (
                               <img
                                 src={m.photoURL}
-                                alt={m.displayName}
-                                className="w-10 h-10 rounded-full border border-[#2e2e2e] shrink-0"
-                                referrerPolicy="no-referrer"
+                                alt=""
+                                className="w-10 h-10 rounded-full border border-[#2e2e2e]"
                               />
                             ) : (
-                              <div className="w-10 h-10 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1] shrink-0">
-                                {m.displayName.charAt(0)}
+                              <div className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                {initial}
                               </div>
                             )}
                             <div className="min-w-0">
                               <div className="font-bold text-[#ededed] truncate">
-                                {m.displayName}
+                                {m.displayName || "Unnamed Staff"}
                               </div>
                               <div className="text-[10px] text-[#a1a1a1] truncate">
                                 {m.email}
@@ -2015,7 +2006,7 @@ export default function Staff() {
                           <div className="flex flex-col items-end shrink-0 gap-1">
                             <div className="flex items-center gap-1.5">
                               <div
-                                className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                                className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`}
                               />
                               <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
                                 {isOnline ? "Online" : "Offline"}
@@ -2026,13 +2017,11 @@ export default function Staff() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex justify-between flex-wrap gap-2 items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                        <div className="flex justify-between items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
                           <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                             System Role
                           </span>
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === "admin" || m.role === "developer" ? "bg-[#3ecf8e]/20 text-[#3ecf8e]" : "bg-[#a1a1a1]/20 text-[#a1a1a1]"}`}
-                          >
+                          <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/20 text-[#a1a1a1]">
                             {m.role?.replace("_", " ")}
                           </span>
                         </div>
