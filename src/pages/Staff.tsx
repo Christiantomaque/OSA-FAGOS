@@ -1838,68 +1838,114 @@ export default function Staff() {
           </div>
         )}
         {tab === "members" && (
-  <div className="space-y-8 max-w-6xl">
-    <div>
-      <h2 className="text-xl font-bold tracking-tight">System Members</h2>
-      <p className="text-[#a1a1a1] text-sm mt-1">Directory of Registered OSA Admins and Staff Members.</p>
-    </div>
+          <div className="space-y-8 max-w-6xl">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">
+                System Members
+              </h2>
+              <p className="text-[#a1a1a1] text-sm mt-1">
+                Directory of Registered OSA Admins and Staff Members.
+              </p>
+            </div>
 
-    <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
-      <div className="hidden md:block overflow-x-auto w-full">
-        <table className="min-w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
-            <tr>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">User Details</th>
-              <th className="px-6 py-4">System Role</th>
-              <th className="px-6 py-4">Last Active</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#2e2e2e]">
-            {members.map((m) => {
-              let dateObj: Date | null = null;
-              if (m.lastLogin) {
-                const parsed = new Date(m.lastLogin);
-                if (!isNaN(parsed.getTime())) dateObj = parsed;
-              }
+            <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+              <div className="hidden md:block overflow-x-auto w-full">
+                <table className="min-w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                    <tr>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">User Details</th>
+                      <th className="px-6 py-4">System Role</th>
+                      <th className="px-6 py-4">Last Active</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2e2e2e]">
+                    {members.map((m) => {
+                      let dateObj: Date | null = null;
+                      if (m.lastLogin) {
+                        const parsed = new Date(m.lastLogin);
+                        if (!isNaN(parsed.getTime())) dateObj = parsed;
+                      }
 
-              // 🚨 REAL-TIME LOGIC: 2 Minute Window 🚨
-              const dbOnline = (m as any).is_online ?? (m as any).isOnline;
-              const isOnline = (typeof dbOnline === "boolean") ? dbOnline : (dateObj ? Math.abs(Date.now() - dateObj.getTime()) < 120000 : false);
+                      // 🚨 REAL-TIME LOGIC: 2 Minute Window 🚨
+                      const dbOnline =
+                        (m as any).is_online ?? (m as any).isOnline;
+                      const isOnline =
+                        typeof dbOnline === "boolean"
+                          ? dbOnline
+                          : dateObj
+                            ? Math.abs(Date.now() - dateObj.getTime()) < 120000
+                            : false;
 
-              let displayDate = "Never";
-              if (dateObj) {
-                const formatted = formatDate(dateObj.toISOString());
-                displayDate = (!formatted || /invalid/i.test(formatted)) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : formatted;
-              }
+                      let displayDate = "Never";
+                      if (dateObj) {
+                        const formatted = formatDate(dateObj.toISOString());
+                        displayDate =
+                          !formatted || /invalid/i.test(formatted)
+                            ? dateObj.toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                            : formatted;
+                      }
 
-              return (
-                <tr key={m.id} className="hover:bg-[#1c1c1c]">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`} />
-                      <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">{isOnline ? "Online" : "Offline"}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {m.photoURL ? <img src={m.photoURL} alt="" className="w-8 h-8 rounded-full border border-[#2e2e2e]" /> : <div className="w-8 h-8 rounded-full bg-[#262626] border flex items-center justify-center font-bold text-[#a1a1a1]">{(m.displayName || "?").charAt(0).toUpperCase()}</div>}
-                      <div><div className="font-bold text-[#ededed]">{m.displayName || "User"}</div><div className="text-[10px] text-[#a1a1a1]">{m.email}</div></div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/10 text-[#a1a1a1]">{m.role?.replace("_", " ")}</span>
-                  </td>
-                  <td className="px-6 py-4 text-[#a1a1a1] text-xs">{displayDate}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-)}
+                      return (
+                        <tr key={m.id} className="hover:bg-[#1c1c1c]">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`}
+                              />
+                              <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                                {isOnline ? "Online" : "Offline"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              {m.photoURL ? (
+                                <img
+                                  src={m.photoURL}
+                                  alt=""
+                                  className="w-8 h-8 rounded-full border border-[#2e2e2e]"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-[#262626] border flex items-center justify-center font-bold text-[#a1a1a1]">
+                                  {(m.displayName || "?")
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-bold text-[#ededed]">
+                                  {m.displayName || "User"}
+                                </div>
+                                <div className="text-[10px] text-[#a1a1a1]">
+                                  {m.email}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/10 text-[#a1a1a1]">
+                              {m.role?.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-[#a1a1a1] text-xs">
+                            {displayDate}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {tab === "settings" && (
           <div className="space-y-8 max-w-4xl">

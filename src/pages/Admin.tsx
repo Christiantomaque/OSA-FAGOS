@@ -3145,108 +3145,192 @@ export default function Admin() {
           )}
 
           {tab === "members" && (
-  <div className="space-y-4 max-w-6xl">
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-      <div>
-        <h2 className="text-lg md:text-xl font-bold tracking-tight">Staff Directory</h2>
-        <p className="text-[#a1a1a1] text-[10px] mt-0.5">Manage OSA Admins, Staff Members and Registration.</p>
-      </div>
-      <div className="relative w-full md:w-64">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#a1a1a1]" />
-        <input
-          type="text" placeholder="Search staff..." value={membersSearch}
-          onChange={(e) => setMembersSearch(e.target.value)}
-          className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-[10px] focus:border-[#3ecf8e] outline-none transition-colors border-white/5"
-        />
-      </div>
-    </div>
+            <div className="space-y-4 max-w-6xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg md:text-xl font-bold tracking-tight">
+                    Staff Directory
+                  </h2>
+                  <p className="text-[#a1a1a1] text-[10px] mt-0.5">
+                    Manage OSA Admins, Staff Members and Registration.
+                  </p>
+                </div>
+                <div className="relative w-full md:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#a1a1a1]" />
+                  <input
+                    type="text"
+                    placeholder="Search staff..."
+                    value={membersSearch}
+                    onChange={(e) => setMembersSearch(e.target.value)}
+                    className="w-full bg-[#171717] border border-[#2e2e2e] rounded-md pl-9 pr-3 py-1.5 text-[10px] focus:border-[#3ecf8e] outline-none transition-colors border-white/5"
+                  />
+                </div>
+              </div>
 
-    <div className="bg-[#1c1c1c] rounded-xl border border-[#2e2e2e] overflow-hidden p-6 mb-6">
-      <h3 className="text-[#ededed] font-medium mb-4 flex items-center gap-2">
-        <Settings className="w-5 h-5 text-[#3ecf8e]" /> System Settings
-      </h3>
-      <div className="bg-[#171717] rounded-lg p-4 border border-[#2e2e2e] flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h4 className="text-[#ededed] font-medium tracking-tight text-sm truncate">System Registration</h4>
-          <p className="text-xs text-[#a1a1a1]">Control whether new users can sign up for an account.</p>
-        </div>
-        <button
-          onClick={handleToggleSignups}
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"}`}
-        >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowSignups ? "translate-x-6" : "translate-x-1"}`} />
-        </button>
-      </div>
-    </div>
+              <div className="bg-[#1c1c1c] rounded-xl border border-[#2e2e2e] overflow-hidden p-6 mb-6">
+                <h3 className="text-[#ededed] font-medium mb-4 flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-[#3ecf8e]" /> System
+                  Settings
+                </h3>
+                <div className="bg-[#171717] rounded-lg p-4 border border-[#2e2e2e] flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <h4 className="text-[#ededed] font-medium tracking-tight text-sm truncate">
+                      System Registration
+                    </h4>
+                    <p className="text-xs text-[#a1a1a1]">
+                      Control whether new users can sign up for an account.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleToggleSignups}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"}`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowSignups ? "translate-x-6" : "translate-x-1"}`}
+                    />
+                  </button>
+                </div>
+              </div>
 
-    <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
-      <div className="hidden md:block overflow-x-auto w-full">
-        <table className="min-w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
-            <tr>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">User Details</th>
-              <th className="px-6 py-4">System Role</th>
-              <th className="px-6 py-4">Last Active</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#2e2e2e]">
-            {filteredMembers.map((m) => {
-              let dateObj: Date | null = null;
-              if (m.lastLogin) {
-                const parsed = typeof m.lastLogin === 'object' && (m.lastLogin as any).toDate ? (m.lastLogin as any).toDate() : new Date(m.lastLogin);
-                if (!isNaN(parsed.getTime())) dateObj = parsed;
-              }
+              <div className="border border-[#2e2e2e] rounded-lg overflow-hidden bg-[#171717] w-full">
+                <div className="hidden md:block overflow-x-auto w-full">
+                  <table className="min-w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-[#262626] border-b border-[#2e2e2e] text-[#a1a1a1] text-xs font-medium uppercase tracking-wider">
+                      <tr>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">User Details</th>
+                        <th className="px-6 py-4">System Role</th>
+                        <th className="px-6 py-4">Last Active</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2e2e2e]">
+                      {filteredMembers.map((m) => {
+                        let dateObj: Date | null = null;
+                        if (m.lastLogin) {
+                          const parsed =
+                            typeof m.lastLogin === "object" &&
+                            (m.lastLogin as any).toDate
+                              ? (m.lastLogin as any).toDate()
+                              : new Date(m.lastLogin);
+                          if (!isNaN(parsed.getTime())) dateObj = parsed;
+                        }
 
-              // 🚨 REAL-TIME LOGIC: 2 Minute Window (120000ms) 🚨
-              const dbOnline = (m as any).is_online ?? (m as any).isOnline;
-              const isOnline = (typeof dbOnline === "boolean") ? dbOnline : (dateObj ? Math.abs(Date.now() - dateObj.getTime()) < 120000 : false);
+                        // 🚨 REAL-TIME LOGIC: 2 Minute Window (120000ms) 🚨
+                        const dbOnline =
+                          (m as any).is_online ?? (m as any).isOnline;
+                        const isOnline =
+                          typeof dbOnline === "boolean"
+                            ? dbOnline
+                            : dateObj
+                              ? Math.abs(Date.now() - dateObj.getTime()) <
+                                120000
+                              : false;
 
-              let displayDate = "Never";
-              if (dateObj) {
-                const formatted = formatDate(dateObj.toISOString());
-                displayDate = (!formatted || /invalid/i.test(formatted)) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : formatted;
-              }
+                        let displayDate = "Never";
+                        if (dateObj) {
+                          const formatted = formatDate(dateObj.toISOString());
+                          displayDate =
+                            !formatted || /invalid/i.test(formatted)
+                              ? dateObj.toLocaleString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })
+                              : formatted;
+                        }
 
-              return (
-                <tr key={m.id} className="hover:bg-[#1c1c1c]">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`} />
-                      <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">{isOnline ? "Online" : "Offline"}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {m.photoURL ? <img src={m.photoURL} alt="" className="w-8 h-8 rounded-full border border-[#2e2e2e]" referrerPolicy="no-referrer" /> : <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">{(m.displayName || "?").charAt(0).toUpperCase()}</div>}
-                      <div>
-                        <div className="font-bold text-[#ededed]">{m.displayName || "User"}</div>
-                        <div className="text-[10px] text-[#a1a1a1]">{m.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {(members.find((usr) => usr.id === user?.uid)?.role === "developer" || (members.find((usr) => usr.id === user?.uid)?.role === "admin" && m.role !== "developer")) ? (
-                      <select value={m.role} onChange={(e) => handleUpdateRole(m.id, e.target.value as any, m.displayName, m.role)} className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none text-[#ededed]">
-                        <option value="developer" disabled={members.find((usr) => usr.id === user?.uid)?.role !== "developer"}>Developer</option>
-                        <option value="admin">Administrator</option>
-                        <option value="staff">Staff/Faculty</option>
-                        <option value="student_assistant">Student Assistant</option>
-                      </select>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/10 text-[#3ecf8e]">{m.role?.replace("_", " ")}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-[#a1a1a1] text-xs">{displayDate}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-)}
+                        return (
+                          <tr key={m.id} className="hover:bg-[#1c1c1c]">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                                />
+                                <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                                  {isOnline ? "Online" : "Offline"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                {m.photoURL ? (
+                                  <img
+                                    src={m.photoURL}
+                                    alt=""
+                                    className="w-8 h-8 rounded-full border border-[#2e2e2e]"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                    {(m.displayName || "?")
+                                      .charAt(0)
+                                      .toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-bold text-[#ededed]">
+                                    {m.displayName || "User"}
+                                  </div>
+                                  <div className="text-[10px] text-[#a1a1a1]">
+                                    {m.email}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {members.find((usr) => usr.id === user?.uid)
+                                ?.role === "developer" ||
+                              (members.find((usr) => usr.id === user?.uid)
+                                ?.role === "admin" &&
+                                m.role !== "developer") ? (
+                                <select
+                                  value={m.role}
+                                  onChange={(e) =>
+                                    handleUpdateRole(
+                                      m.id,
+                                      e.target.value as any,
+                                      m.displayName,
+                                      m.role,
+                                    )
+                                  }
+                                  className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none text-[#ededed]"
+                                >
+                                  <option
+                                    value="developer"
+                                    disabled={
+                                      members.find(
+                                        (usr) => usr.id === user?.uid,
+                                      )?.role !== "developer"
+                                    }
+                                  >
+                                    Developer
+                                  </option>
+                                  <option value="admin">Administrator</option>
+                                  <option value="staff">Staff/Faculty</option>
+                                  <option value="student_assistant">
+                                    Student Assistant
+                                  </option>
+                                </select>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/10 text-[#3ecf8e]">
+                                  {m.role?.replace("_", " ")}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-[#a1a1a1] text-xs">
+                              {displayDate}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
           {tab === "settings" && (
             <div className="space-y-8 max-w-4xl">
