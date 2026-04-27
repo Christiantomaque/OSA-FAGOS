@@ -712,7 +712,8 @@ export default function Staff() {
   if (!authorized) {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#3ecf8e]" />
+        <AlertModal {...modal} onClose={hideAlert} />
+        {!modal.isOpen && <Loader2 className="animate-spin text-[#3ecf8e]" />}
       </div>
     );
   }

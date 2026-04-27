@@ -1453,7 +1453,8 @@ export default function Admin() {
   if (!authorized) {
     return (
       <div className="flex justify-center p-20 bg-[#1c1c1c] min-h-screen items-center">
-        <Loader2 className="animate-spin text-[#3ecf8e]" />
+        <AlertModal {...modal} onClose={hideAlert} />
+        {!modal.isOpen && <Loader2 className="animate-spin text-[#3ecf8e]" />}
       </div>
     );
   }
