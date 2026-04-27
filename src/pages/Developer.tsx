@@ -2901,55 +2901,91 @@ export default function Developer() {
                             colSpan={4}
                             className="px-6 py-10 text-center text-[#a1a1a1]"
                           >
-                            No members found.
+                            No members found matching your search.
                           </td>
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // 🚨 1. ROBUST DATE PARSING 🚨
+                          // ── ONLINE STATUS (live is_online if present, otherwise time-based) ──
+                          let isOnline = false;
+                          if (typeof (m as any).is_online === "boolean") {
+                            isOnline = (m as any).is_online;
+                          } else {
+                            // Fallback to 5‑minute window with direction check
+                            let dateObj: Date | null = null;
+                            try {
+                              if (m.lastLogin) {
+                                if (m.lastLogin instanceof Date) {
+                                  dateObj = m.lastLogin;
+                                } else if (
+                                  typeof m.lastLogin === "string" ||
+                                  typeof m.lastLogin === "number"
+                                ) {
+                                  const d = new Date(m.lastLogin);
+                                  if (!isNaN(d.getTime())) dateObj = d;
+                                }
+                              }
+                            } catch (_) {}
+                            if (dateObj && !isNaN(dateObj.getTime())) {
+                              const diff = Date.now() - dateObj.getTime();
+                              isOnline = diff > -30_000 && diff < 300_000;
+                            }
+                          }
+
+                          // ── LAST ACTIVE DISPLAY ──
                           let dateObj: Date | null = null;
                           try {
                             if (m.lastLogin) {
-                              dateObj =
-                                typeof m.lastLogin === "object" &&
-                                (m.lastLogin as any).toDate
-                                  ? (m.lastLogin as any).toDate()
-                                  : new Date(m.lastLogin);
+                              if (m.lastLogin instanceof Date) {
+                                dateObj = m.lastLogin;
+                              } else if (
+                                typeof m.lastLogin === "string" ||
+                                typeof m.lastLogin === "number"
+                              ) {
+                                const d = new Date(m.lastLogin);
+                                if (!isNaN(d.getTime())) dateObj = d;
+                              }
                             }
-                          } catch (e) {
-                            dateObj = null;
-                          }
+                          } catch (_) {}
                           const isValid = dateObj && !isNaN(dateObj.getTime());
-
-                          // 🚨 2. IMPROVED ONLINE STATUS LOGIC 🚨
-                          let isOnline = false;
-                          // Check if the boolean field exists first (case-insensitive check)
-                          const dbIsOnline =
-                            (m as any).is_online ?? (m as any).isOnline;
-
-                          if (typeof dbIsOnline === "boolean") {
-                            isOnline = dbIsOnline;
-                          } else if (isValid && dateObj) {
-                            // Fallback: If no boolean, check if lastLogin was within the last 10 minutes
-                            // We use Math.abs to handle cases where the user's computer clock is behind the server
-                            isOnline =
-                              Math.abs(Date.now() - dateObj.getTime()) < 600000;
-                          }
-
-                          // 🚨 3. "INVALID DATE" KILLER 🚨
                           let displayDate = "Never";
                           if (isValid && dateObj) {
-                            const formatted = formatDate(dateObj.toISOString());
-                            displayDate =
-                              !formatted || /invalid/i.test(formatted)
-                                ? dateObj.toLocaleString("en-US", {
+                            try {
+                              const formatted = formatDate(
+                                dateObj.toISOString(),
+                              );
+                              if (
+                                !formatted ||
+                                formatted === "INVALID DATE" ||
+                                formatted.toUpperCase().includes("INVALID")
+                              ) {
+                                displayDate = dateObj.toLocaleDateString(
+                                  "en-US",
+                                  {
                                     month: "short",
                                     day: "numeric",
+                                    year: "numeric",
                                     hour: "numeric",
                                     minute: "2-digit",
                                     hour12: true,
-                                  })
-                                : formatted;
+                                  },
+                                );
+                              } else {
+                                displayDate = formatted;
+                              }
+                            } catch (_) {
+                              displayDate = dateObj.toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                },
+                              );
+                            }
                           }
 
                           const initial = (m.displayName || m.email || "?")
@@ -2961,7 +2997,11 @@ export default function Developer() {
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
                                   <div
-                                    className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
+                                    className={`w-2 h-2 rounded-full ${
+                                      isOnline
+                                        ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]"
+                                        : "bg-[#a1a1a1]"
+                                    }`}
                                   />
                                   <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                                     {isOnline ? "Online" : "Offline"}
@@ -2984,7 +3024,7 @@ export default function Developer() {
                                   )}
                                   <div>
                                     <div className="font-bold text-[#ededed]">
-                                      {m.displayName || "User"}
+                                      {m.displayName || "Unnamed User"}
                                     </div>
                                     <div className="text-[10px] text-[#a1a1a1]">
                                       {m.email}
@@ -3023,7 +3063,6 @@ export default function Developer() {
                     </tbody>
                   </table>
                 </div>
-                {/* Mobile Card View uses identical logic - apply the same isOnline/displayDate variables there */}
               </div>
             </div>
           )}
