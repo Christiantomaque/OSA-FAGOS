@@ -58,12 +58,15 @@ export const getTodayYYYYMMDD = () => {
   return `${year}-${month}-${day}`;
 };
 
-export const formatDynamicTimeDisplay = (secs: number) => {
-  if (secs < 60) return `${secs} SEC${secs !== 1 ? 'S' : ''}`;
-  if (secs < 3600) {
-    const mins = Math.floor(secs / 60);
-    return `${mins} MIN${mins !== 1 ? 'S' : ''}`;
+export const formatDynamicTimeDisplay = (totalSecs: number) => {
+  if (totalSecs < 60) {
+    const s = Math.max(0, Math.floor(totalSecs));
+    return `${s} SEC${s === 1 ? '' : 'S'}`;
+  } else if (totalSecs < 3600) {
+    const mins = Math.floor(totalSecs / 60);
+    return `${mins} MIN${mins === 1 ? '' : 'S'}`;
+  } else {
+    const hrsStr = (totalSecs / 3600).toFixed(1);
+    return `${hrsStr} HR${Number(hrsStr) === 1 ? '' : 'S'}`;
   }
-  const hrs = Number((secs / 3600).toFixed(1));
-  return `${hrs} HR${hrs !== 1 ? 'S' : ''}`;
 };

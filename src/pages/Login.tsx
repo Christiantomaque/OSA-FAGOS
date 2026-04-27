@@ -9,9 +9,7 @@ import {
   signInWithGoogle, 
   signInWithMicrosoft, 
   sendPasswordResetEmail,
-  auth,
-  supabaseUrl,
-  supabaseAnonKey 
+  auth 
 } from '../lib/supabase';
 import { Loader2, Mail, Lock, LogIn, Chrome, Monitor, Home, ShieldCheck } from 'lucide-react';
 
@@ -36,34 +34,16 @@ export default function Login() {
     }
   }, [location.state, navigate]);
 
-  // 🔥 FIX 1: Fetch settings with a timeout so the page never buffers forever
   useEffect(() => {
-    let cancelled = false;
-    
     const fetchSettings = async () => {
       try {
-        // Add a safety timeout – if the fetch takes > 5 seconds, force stop loading
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 5000)
-        );
-
-        const fetchPromise = getDoc(doc(db, 'settings', 'global'));
-        
-        const snap = await Promise.race([fetchPromise, timeoutPromise]) as any;
-        
-        if (!cancelled && snap?.exists() && snap.data().allowSignups !== undefined) {
+        const snap = await getDoc(doc(db, 'settings', 'global'));
+        if (snap.exists() && snap.data().allowSignups !== undefined) {
           setAllowSignups(snap.data().allowSignups);
         }
-      } catch (e) { 
-        console.error("Settings fetch failed (non-critical):", e); 
-      } finally { 
-        if (!cancelled) setLoading(false); 
-      }
+      } catch (e) { console.error("Settings failed:", e); } finally { setLoading(false); }
     };
-    
     fetchSettings();
-    
-    return () => { cancelled = true; };
   }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -74,38 +54,16 @@ export default function Login() {
       if (isRegistering) {
         // ENFORCE EXACT WORDING ON MANUAL SIGNUP
         if (!allowSignups) throw new Error("Registration is not allowed at the moment. Please contact the admin.");
-        
-        // 🔥 FIX 2: Add basic rate-limit awareness before attempting signup
-        const lastAttempt = sessionStorage.getItem('lastSignupAttempt');
-        if (lastAttempt && Date.now() - parseInt(lastAttempt) < 60000) {
-          throw new Error("Please wait 60 seconds before trying again.");
-        }
-        sessionStorage.setItem('lastSignupAttempt', Date.now().toString());
-        
         await createUserWithEmailAndPassword(auth, authEmail, authPassword);
       } else {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
-    } catch (err: any) { 
-      setAuthError(err.message); 
-    } finally { 
-      setIsSubmitting(false); 
-    }
+    } catch (err: any) { setAuthError(err.message); } finally { setIsSubmitting(false); }
   };
 
-  // 🔥 FIX 3: Show a minimal loading skeleton instead of full-screen spinner
   if (loading) return (
-    <div className="min-h-screen bg-[#1c1c1c] flex flex-col items-center justify-center p-6">
-      <div className="bg-[#171717] border border-[#2e2e2e] max-w-[340px] w-full p-7 rounded-2xl text-center shadow-2xl animate-pulse">
-        <div className="w-10 h-10 bg-[#262626] rounded-xl mx-auto mb-4" />
-        <div className="h-6 bg-[#262626] rounded w-32 mx-auto mb-2" />
-        <div className="h-3 bg-[#262626] rounded w-24 mx-auto mb-6" />
-        <div className="space-y-3">
-          <div className="h-10 bg-[#262626] rounded-xl" />
-          <div className="h-10 bg-[#262626] rounded-xl" />
-          <div className="h-12 bg-[#262626] rounded-xl mt-2" />
-        </div>
-      </div>
+    <div className="flex justify-center bg-[#1c1c1c] min-h-screen items-center">
+      <Loader2 className="animate-spin text-[#3ecf8e] w-6 h-6" />
     </div>
   );
 
