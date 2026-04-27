@@ -1861,89 +1861,59 @@ export default function Staff() {
                   </thead>
                   <tbody className="divide-y divide-[#2e2e2e]">
                     {members.map((m) => {
-                      // ── ONLINE STATUS ──
-                      // Use dedicated is_online field if available; else fall back to time-based
-                      let isOnline = false;
-                      if (typeof (m as any).is_online === "boolean") {
-                        isOnline = (m as any).is_online;
-                      } else {
-                        let dateObj: Date | null = null;
+                      // ── 1. UNIFIED DATE PARSING ──
+                      let dateObj: Date | null = null;
+                      if (m.lastLogin) {
+                        const parsed =
+                          typeof m.lastLogin === "object" &&
+                          (m.lastLogin as any).toDate
+                            ? (m.lastLogin as any).toDate()
+                            : new Date(m.lastLogin);
+                        if (!isNaN(parsed.getTime())) dateObj = parsed;
+                      }
+
+                      // ── 2. ROBUST ONLINE LOGIC ──
+                      // We check both naming conventions and fall back to 10-min window
+                      const manualOnline =
+                        (m as any).is_online ?? (m as any).isOnline;
+                      const isOnline =
+                        typeof manualOnline === "boolean"
+                          ? manualOnline
+                          : dateObj
+                            ? Math.abs(Date.now() - dateObj.getTime()) < 600000
+                            : false;
+
+                      // ── 3. FAIL-SAFE DATE DISPLAY ──
+                      let displayDate = "Never";
+                      if (dateObj) {
                         try {
-                          if (m.lastLogin) {
-                            if (m.lastLogin instanceof Date) {
-                              dateObj = m.lastLogin;
-                            } else if (
-                              typeof m.lastLogin === "string" ||
-                              typeof m.lastLogin === "number"
-                            ) {
-                              const d = new Date(m.lastLogin);
-                              if (!isNaN(d.getTime())) dateObj = d;
-                            }
-                          }
-                        } catch (_) {}
-                        if (dateObj && !isNaN(dateObj.getTime())) {
-                          const diff = Date.now() - dateObj.getTime();
-                          // Only online if in the past (with 30s clock drift) and within 5 minutes
-                          isOnline = diff > -30_000 && diff < 300_000;
+                          const formatted = formatDate(dateObj.toISOString());
+                          // If custom formatter returns "INVALID" or is null, use native JS
+                          displayDate =
+                            !formatted || /invalid/i.test(formatted)
+                              ? dateObj.toLocaleString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })
+                              : formatted;
+                        } catch (e) {
+                          displayDate = dateObj.toLocaleDateString();
                         }
                       }
 
-                      // ── LAST ACTIVE DISPLAY (robust parsing) ──
-                      let dateObj: Date | null = null;
-                      try {
-                        if (m.lastLogin) {
-                          if (m.lastLogin instanceof Date) {
-                            dateObj = m.lastLogin;
-                          } else if (
-                            typeof m.lastLogin === "string" ||
-                            typeof m.lastLogin === "number"
-                          ) {
-                            const d = new Date(m.lastLogin);
-                            if (!isNaN(d.getTime())) dateObj = d;
-                          }
-                        }
-                      } catch (_) {}
-                      const isValid = dateObj && !isNaN(dateObj.getTime());
-                      let displayDate = "Never";
-                      if (isValid && dateObj) {
-                        try {
-                          const formatted = formatDate(dateObj.toISOString());
-                          if (
-                            !formatted ||
-                            formatted === "INVALID DATE" ||
-                            formatted.toUpperCase().includes("INVALID")
-                          ) {
-                            displayDate = dateObj.toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                              hour12: true,
-                            });
-                          } else {
-                            displayDate = formatted;
-                          }
-                        } catch (_) {
-                          displayDate = dateObj.toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                            hour12: true,
-                          });
-                        }
-                      }
+                      const initial = (m.displayName || m.email || "?")
+                        .charAt(0)
+                        .toUpperCase();
 
                       return (
                         <tr key={m.id} className="hover:bg-[#1c1c1c]">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <div
-                                className={`w-2 h-2 rounded-full ${
-                                  isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"
-                                }`}
+                                className={`w-2 h-2 rounded-full ${isOnline ? "bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]" : "bg-[#a1a1a1]"}`}
                               />
                               <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                                 {isOnline ? "Online" : "Offline"}
@@ -1957,10 +1927,11 @@ export default function Staff() {
                                   src={m.photoURL}
                                   alt=""
                                   className="w-8 h-8 rounded-full border border-[#2e2e2e]"
+                                  referrerPolicy="no-referrer"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-[#262626] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                  {(m.displayName || "?").charAt(0)}
+                                <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                  {initial}
                                 </div>
                               )}
                               <div>
@@ -1974,7 +1945,9 @@ export default function Staff() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/20 text-[#a1a1a1]">
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/10 text-[#a1a1a1]`}
+                            >
                               {m.role?.replace("_", " ")}
                             </span>
                           </td>
