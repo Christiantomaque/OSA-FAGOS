@@ -2907,22 +2907,30 @@ export default function Developer() {
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // 🚨 FIX: Bulletproof Time Extractor for Firebase Timestamps 🚨
-                          const loginTime = m.lastLogin
-                            ? typeof m.lastLogin === "object" &&
-                              m.lastLogin.toDate
-                              ? m.lastLogin.toDate().getTime()
-                              : new Date(m.lastLogin).getTime()
-                            : 0;
-                          const isOnline = Date.now() - loginTime < 300000;
-                          const displayDate = m.lastLogin
-                            ? typeof m.lastLogin === "object" &&
-                              m.lastLogin.toDate
-                              ? formatDate(m.lastLogin.toDate().toISOString())
-                              : formatDate(
-                                  new Date(m.lastLogin).toISOString(),
-                                ).replace("Invalid Date", "Just now")
-                            : "Never";
+                          // 🚨 FIX: Bulletproof Time Extractor
+                          let loginTime = 0;
+                          let displayDate = "Never";
+
+                          if (m.lastLogin) {
+                            try {
+                              const d =
+                                typeof m.lastLogin === "object"
+                                  ? m.lastLogin.toDate
+                                    ? m.lastLogin.toDate()
+                                    : new Date(m.lastLogin.seconds * 1000)
+                                  : new Date(m.lastLogin);
+
+                              loginTime = d.getTime();
+                              displayDate = isNaN(loginTime)
+                                ? "Just now"
+                                : formatDate(d.toISOString());
+                            } catch (e) {
+                              displayDate = "Just now";
+                            }
+                          }
+
+                          const isOnline =
+                            loginTime !== 0 && Date.now() - loginTime < 300000;
 
                           return (
                             <tr key={m.id} className="hover:bg-[#1c1c1c]">
@@ -2961,7 +2969,6 @@ export default function Developer() {
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                {/* 🚨 FIX: Removed the restrictive Admin Lockout 🚨 */}
                                 {members.find((usr) => usr.id === user?.uid)
                                   ?.role === "developer" ||
                                 (members.find((usr) => usr.id === user?.uid)
@@ -3007,7 +3014,6 @@ export default function Developer() {
                         })
                       )}
                     </tbody>
-                    //------end of table body--
                   </table>
                 </div>
 
@@ -3019,20 +3025,30 @@ export default function Developer() {
                     </div>
                   ) : (
                     filteredMembers.map((m) => {
-                      // 🚨 FIX: Bulletproof Time Extractor for Mobile View 🚨
-                      const loginTime = m.lastLogin
-                        ? typeof m.lastLogin === "object" && m.lastLogin.toDate
-                          ? m.lastLogin.toDate().getTime()
-                          : new Date(m.lastLogin).getTime()
-                        : 0;
-                      const isOnline = Date.now() - loginTime < 300000;
-                      const displayDate = m.lastLogin
-                        ? typeof m.lastLogin === "object" && m.lastLogin.toDate
-                          ? formatDate(m.lastLogin.toDate().toISOString())
-                          : formatDate(
-                              new Date(m.lastLogin).toISOString(),
-                            ).replace("Invalid Date", "Just now")
-                        : "Never";
+                      // 🚨 FIX: Bulletproof Time Extractor
+                      let loginTime = 0;
+                      let displayDate = "Never";
+
+                      if (m.lastLogin) {
+                        try {
+                          const d =
+                            typeof m.lastLogin === "object"
+                              ? m.lastLogin.toDate
+                                ? m.lastLogin.toDate()
+                                : new Date(m.lastLogin.seconds * 1000)
+                              : new Date(m.lastLogin);
+
+                          loginTime = d.getTime();
+                          displayDate = isNaN(loginTime)
+                            ? "Just now"
+                            : formatDate(d.toISOString());
+                        } catch (e) {
+                          displayDate = "Just now";
+                        }
+                      }
+
+                      const isOnline =
+                        loginTime !== 0 && Date.now() - loginTime < 300000;
 
                       return (
                         <div
@@ -3080,7 +3096,6 @@ export default function Developer() {
                             <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
                               System Role
                             </span>
-                            {/* 🚨 FIX: Removed Mobile Admin Lockout 🚨 */}
                             {members.find((usr) => usr.id === user?.uid)
                               ?.role === "developer" ||
                             (members.find((usr) => usr.id === user?.uid)
