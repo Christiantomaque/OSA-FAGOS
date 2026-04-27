@@ -9,8 +9,6 @@ import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
 import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertCircle } from 'lucide-react';
-
-// 👇 Import your Supabase URL and anon key from the same place you created the client
 import { supabaseUrl, supabaseAnonKey } from './lib/supabase';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -30,13 +28,24 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ── Refs to hold current user id and access token for beforeunload ──
+  // ── Refs for beforeunload ──
   const userIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
 
-  // ──────────────────────────────────────────────
-  // 1.  ONLINE / OFFLINE TRACKING (Supabase v2)
-  // ──────────────────────────────────────────────
+  // 🔥 SAFETY TIMEOUT – force ready after 10s
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setInitializing(prev => {
+        if (prev) console.warn("Auth init timeout – forcing ready state");
+        return false;
+      });
+    }, 10_000);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  // ─────────────────────────────────
+  // 1.  ONLINE / OFFLINE TRACKING
+  // ─────────────────────────────────
   useEffect(() => {
     const {
       data: { subscription },
@@ -52,7 +61,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // When the user closes the tab / browser, set them offline
     const handleBeforeUnload = () => {
       const uid = userIdRef.current;
       const token = accessTokenRef.current;
@@ -78,20 +86,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Sign‑out helper that also sets is_online = false
   const signOutWithOffline = useCallback(async () => {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
         await supabase.from('admins').update({ is_online: false }).eq('id', currentUser.id);
       }
-    } catch (e) { /* ignore – just signing out anyway */ }
+    } catch (e) { /* ignore */ }
     await supabase.auth.signOut();
   }, []);
 
-  // ──────────────────────────────────────────────
-  // 2.  EXISTING AUTH LOGIC (MFA, ROLES, ETC.)
-  // ──────────────────────────────────────────────
+  // ─────────────────────────────────
+  // 2.  MAIN AUTH LOGIC
+  // ─────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(null, async (u) => {
       if (isSyncing.current) return;
@@ -99,7 +106,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
       try {
         if (u) {
-          // --- 1. SYSTEM REGISTRATION LOCKDOWN GATE ---
+          // --- REGISTRATION GATE ---
           const userDoc = await getDoc(doc(db, 'admins', u.uid));
           
           if (!userDoc.exists() && u.email !== 'christiantomaque18@gmail.com') {
@@ -127,11 +134,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               email: u.email, displayName: 'Developer', role: 'developer', lastLogin: serverTimestamp()
             });
           }
-          // --- END LOCKDOWN GATE ---
 
           setUser(u);
           
-          // 2. THE 30-DAY TRUST LOGIC
+          // THE 30-DAY TRUST LOGIC
           const trustKey = `mfa_trust_${u.uid}`;
           const trustExpiry = localStorage.getItem(trustKey);
           const isTrusted = trustExpiry && Date.now() < parseInt(trustExpiry);
@@ -247,7 +253,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // --- COMPACT GATE UI ---
+  // --- MFA GATE UI ---
   if (user && mfaStatus !== 'verified' && window.location.pathname !== '/' && window.location.pathname !== '/portal') {
     return (
       <div className="min-h-screen bg-[#1c1c1c] flex items-center justify-center p-4">
