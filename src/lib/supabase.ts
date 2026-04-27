@@ -56,6 +56,7 @@ export const logout = async () => {
     return await supabase.auth.signOut();
 };
 
+// 🔥 FIXED: Uses getSession() (never throws) and always calls the callback
 export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void) => {
     const firebaseUser = (u: any): User | null => u ? { 
         uid: u.id, 
@@ -64,11 +65,21 @@ export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void
         displayName: u.user_metadata?.full_name 
     } : null;
 
-    // Fix for Supabase v2: use getUser and onAuthStateChange correctly
-    supabase.auth.getUser().then(({ data: { user } }) => cb(firebaseUser(user)));
+    // Get initial session (won't throw on expired tokens)
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        cb(firebaseUser(session?.user ?? null));
+      })
+      .catch(() => {
+        // If getSession fails for any reason, treat as no user
+        cb(null);
+      });
+
+    // Listen for future auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        cb(firebaseUser(session?.user));
+        cb(firebaseUser(session?.user ?? null));
     });
+
     return () => subscription.unsubscribe();
 };
 
