@@ -1642,24 +1642,49 @@ export default function Staff() {
                       </tr>
                     ) : (
                       members.map((m) => {
-                        // 🚨 THE DISKAR ATOMIC FIX (DESKTOP) 🚨
-                        const rawDate = m.lastLogin;
+                        // 🚨 1. ROBUST DATE PARSING 🚨
                         let dateObj: Date | null = null;
+                        try {
+                          if (m.lastLogin) {
+                            dateObj =
+                              typeof m.lastLogin === "object" &&
+                              (m.lastLogin as any).toDate
+                                ? (m.lastLogin as any).toDate()
+                                : new Date(m.lastLogin);
+                          }
+                        } catch (e) {
+                          dateObj = null;
+                        }
+                        const isValid = dateObj && !isNaN(dateObj.getTime());
 
-                        if (rawDate) {
-                          const d =
-                            typeof rawDate === "object" && rawDate.toDate
-                              ? rawDate.toDate()
-                              : new Date(rawDate);
-                          if (!isNaN(d.getTime())) dateObj = d;
+                        // 🚨 2. ROBUST ONLINE LOGIC (10-min window + Math.abs) 🚨
+                        const dbOnline =
+                          (m as any).is_online ?? (m as any).isOnline;
+                        const isOnline =
+                          typeof dbOnline === "boolean"
+                            ? dbOnline
+                            : isValid
+                              ? Math.abs(Date.now() - dateObj!.getTime()) <
+                                600000
+                              : false;
+
+                        // 🚨 3. FAIL-SAFE DATE DISPLAY 🚨
+                        let displayDate = "Never";
+                        if (isValid && dateObj) {
+                          const formatted = formatDate(dateObj.toISOString());
+                          displayDate =
+                            !formatted || /invalid/i.test(formatted)
+                              ? dateObj.toLocaleString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })
+                              : formatted;
                         }
 
-                        const isOnline = dateObj
-                          ? Math.abs(Date.now() - dateObj.getTime()) < 300000
-                          : false;
-                        const displayDate = dateObj
-                          ? formatDate(dateObj.toISOString())
-                          : "Never";
                         const initial = (m.displayName || m.email || "?")
                           .charAt(0)
                           .toUpperCase();
@@ -1692,7 +1717,7 @@ export default function Staff() {
                                 )}
                                 <div>
                                   <div className="font-bold text-[#ededed]">
-                                    {m.displayName || "Unnamed User"}
+                                    {m.displayName || "User"}
                                   </div>
                                   <div className="text-[10px] text-[#a1a1a1]">
                                     {m.email}
@@ -1701,9 +1726,7 @@ export default function Staff() {
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === "admin" || m.role === "developer" ? "bg-[#3ecf8e]/20 text-[#3ecf8e]" : "bg-[#a1a1a1]/20 text-[#a1a1a1]"}`}
-                              >
+                              <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/10 text-[#a1a1a1]">
                                 {m.role?.replace("_", " ")}
                               </span>
                             </td>
@@ -1726,29 +1749,30 @@ export default function Staff() {
                   </div>
                 ) : (
                   members.map((m) => {
-                    const rawDate = m.lastLogin;
                     let dateObj: Date | null = null;
-                    if (rawDate) {
-                      const d =
-                        typeof rawDate === "object" && rawDate.toDate
-                          ? rawDate.toDate()
-                          : new Date(rawDate);
+                    if (m.lastLogin) {
+                      const d = new Date(m.lastLogin);
                       if (!isNaN(d.getTime())) dateObj = d;
                     }
-                    const isOnline = dateObj
-                      ? Math.abs(Date.now() - dateObj.getTime()) < 300000
-                      : false;
+                    const dbOnline =
+                      (m as any).is_online ?? (m as any).isOnline;
+                    const isOnline =
+                      typeof dbOnline === "boolean"
+                        ? dbOnline
+                        : dateObj
+                          ? Math.abs(Date.now() - dateObj.getTime()) < 600000
+                          : false;
                     const displayDate = dateObj
-                      ? formatDate(dateObj.toISOString())
+                      ? dateObj.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
                       : "Never";
-                    const initial = (m.displayName || m.email || "?")
-                      .charAt(0)
-                      .toUpperCase();
 
                     return (
                       <div
                         key={m.id}
-                        className="p-4 space-y-4 hover:bg-[#1c1c1c] transition-colors"
+                        className="p-4 space-y-4 hover:bg-[#1c1c1c]"
                       >
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex items-center gap-3 overflow-hidden">
@@ -1760,12 +1784,12 @@ export default function Staff() {
                               />
                             ) : (
                               <div className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                {initial}
+                                {(m.displayName || "?").charAt(0)}
                               </div>
                             )}
                             <div className="min-w-0">
                               <div className="font-bold text-[#ededed] truncate">
-                                {m.displayName || "Unnamed User"}
+                                {m.displayName || "User"}
                               </div>
                               <div className="text-[10px] text-[#a1a1a1] truncate">
                                 {m.email}
@@ -1788,7 +1812,7 @@ export default function Staff() {
                         </div>
                         <div className="flex justify-between items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
                           <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
-                            System Role
+                            Role
                           </span>
                           <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#a1a1a1]/20 text-[#a1a1a1]">
                             {m.role?.replace("_", " ")}
