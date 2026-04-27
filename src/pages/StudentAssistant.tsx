@@ -258,7 +258,7 @@ export default function Staff() {
       unsubRecords();
       unsubMembers();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   const handleLogout = async () => {
     await logout();

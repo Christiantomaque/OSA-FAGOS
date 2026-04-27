@@ -321,7 +321,7 @@ export default function Developer() {
       unsubApprovals();
       unsubSettings();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   const handleToggleSignups = async () => {
     try {

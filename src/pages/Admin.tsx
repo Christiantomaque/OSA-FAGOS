@@ -479,7 +479,7 @@ export default function Admin() {
       unsubApprovals();
       unsubSettings();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   const handleToggleSignups = async () => {
     try {

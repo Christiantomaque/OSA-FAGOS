@@ -56,31 +56,47 @@ export const logout = async () => {
     return await supabase.auth.signOut();
 };
 
-// 🔥 FIXED: Uses getSession() (never throws) and always calls the callback
-export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void) => {
-    const firebaseUser = (u: any): User | null => u ? { 
-        uid: u.id, 
-        email: u.email, 
-        photoURL: u.user_metadata?.avatar_url, 
-        displayName: u.user_metadata?.full_name 
-    } : null;
+const firebaseUser = (u: any): User | null => u ? { 
+    uid: u.id, 
+    email: u.email, 
+    photoURL: u.user_metadata?.avatar_url, 
+    displayName: u.user_metadata?.full_name 
+} : null;
 
-    // Get initial session (won't throw on expired tokens)
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        cb(firebaseUser(session?.user ?? null));
-      })
-      .catch(() => {
-        // If getSession fails for any reason, treat as no user
-        cb(null);
-      });
+let globalAuthState: { user: User | null; loaded: boolean } = { user: null, loaded: false };
+const authListeners = new Set<(user: User | null) => void>();
 
-    // Listen for future auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        cb(firebaseUser(session?.user ?? null));
+let authInitStarted = false;
+const initGlobalAuth = () => {
+    if (authInitStarted) return;
+    authInitStarted = true;
+
+    // Start background token refresh checking
+    supabase.auth.onAuthStateChange((_event, session) => {
+        const u = firebaseUser(session?.user);
+        globalAuthState = { user: u, loaded: true };
+        authListeners.forEach(cb => cb(u));
     });
 
-    return () => subscription.unsubscribe();
+    // Fire the initial state request (only once!)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+        const u = firebaseUser(user);
+        globalAuthState = { user: u, loaded: true };
+        authListeners.forEach(cb => cb(u));
+    }).catch(err => {
+        console.warn("Global getUser error", err);
+    });
+};
+
+export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void) => {
+    initGlobalAuth();
+    if (globalAuthState.loaded) {
+        cb(globalAuthState.user);
+    }
+    authListeners.add(cb);
+    return () => {
+        authListeners.delete(cb);
+    };
 };
 
 // ==========================================
