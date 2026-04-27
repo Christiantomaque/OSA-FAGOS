@@ -1951,58 +1951,67 @@
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#2e2e2e]">
-                        {filteredMembers.length === 0 ? (
-                          <tr><td colSpan={4} className="px-6 py-10 text-center text-[#a1a1a1]">No members found matching your search.</td></tr>
-                        ) : filteredMembers.map(m => (
-                          <tr key={m.id} className="hover:bg-[#1c1c1c]">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                  <div className={`w-2 h-2 rounded-full ${Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]' : 'bg-[#a1a1a1]'}`} />
-                                <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
-                                  {Date.now() - (m.lastLogin ? new Date(m.lastLogin).getTime() : 0) < 300000 ? 'Online' : 'Offline'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                {m.photoURL ? (
-                                  <img src={m.photoURL} alt={m.displayName} className="w-8 h-8 rounded-full border border-[#2e2e2e]" referrerPolicy="no-referrer" />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                    {m.displayName.charAt(0)}
-                                  </div>
-                                )}
-                                <div>
-                                  <div className="font-bold text-[#ededed]">{m.displayName}</div>
-                                  <div className="text-[10px] text-[#a1a1a1]">{m.email}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {(members.find(usr => usr.id === user?.uid)?.role === 'developer' || 
-                                (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer' && m.role !== 'admin' && m.id !== user?.uid)) ? (
-                                <select
-                                  value={m.role}
-                                  onChange={(e) => handleUpdateRole(m.id, e.target.value as AdminMember['role'], m.displayName, m.role)}
-                                  className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
-                                >
-                                    <option value="developer" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer'}>Developer</option>
-                                    <option value="admin" disabled={members.find(usr => usr.id === user?.uid)?.role !== 'developer' && members.find(usr => usr.id === user?.uid)?.role !== 'admin'}>Administrator</option>
-                                    <option value="staff">Staff/Faculty</option>
-                                    <option value="student_assistant">Student Assistant</option>
-                                </select>
-                              ) : (
-                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
-                                  {m.role?.replace('_', ' ')}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-[#a1a1a1] text-xs">
-                              {m.lastLogin ? formatDate(new Date(m.lastLogin).toISOString()) : 'Never'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
+  {filteredMembers.length === 0 ? (
+    <tr><td colSpan={4} className="px-6 py-10 text-center text-[#a1a1a1]">No members found matching your search.</td></tr>
+  ) : filteredMembers.map(m => {
+    // 🚨 FIX: Bulletproof Time Extractor for Firebase Timestamps 🚨
+    const loginTime = m.lastLogin ? (typeof m.lastLogin === 'object' && m.lastLogin.toDate ? m.lastLogin.toDate().getTime() : new Date(m.lastLogin).getTime()) : 0;
+    const isOnline = Date.now() - loginTime < 300000;
+    const displayDate = m.lastLogin ? (typeof m.lastLogin === 'object' && m.lastLogin.toDate ? formatDate(m.lastLogin.toDate().toISOString()) : formatDate(new Date(m.lastLogin).toISOString()).replace('Invalid Date', 'Just now')) : 'Never';
+    
+    return (
+    <tr key={m.id} className="hover:bg-[#1c1c1c]">
+      <td className="px-6 py-4">
+         <div className="flex items-center gap-2">
+             <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3ecf8e] shadow-[0_0_8px_rgba(62,207,142,0.4)]' : 'bg-[#a1a1a1]'}`} />
+           <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+             {isOnline ? 'Online' : 'Offline'}
+           </span>
+         </div>
+      </td>
+      <td className="px-6 py-4">
+         <div className="flex items-center gap-3">
+           {m.photoURL ? (
+             <img src={m.photoURL} alt={m.displayName} className="w-8 h-8 rounded-full border border-[#2e2e2e]" referrerPolicy="no-referrer" />
+           ) : (
+             <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+               {m.displayName.charAt(0)}
+             </div>
+           )}
+           <div>
+             <div className="font-bold text-[#ededed]">{m.displayName}</div>
+             <div className="text-[10px] text-[#a1a1a1]">{m.email}</div>
+           </div>
+         </div>
+      </td>
+      <td className="px-6 py-4">
+         {/* 🚨 FIX: Removed the restrictive Admin Lockout 🚨 */}
+         {(members.find(usr => usr.id === user?.uid)?.role === 'developer' || 
+           (members.find(usr => usr.id === user?.uid)?.role === 'admin' && m.role !== 'developer')) ? (
+           <select
+             value={m.role}
+             onChange={(e) => handleUpdateRole(m.id, e.target.value as AdminMember['role'], m.displayName, m.role)}
+             className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
+           >
+              {members.find(usr => usr.id === user?.uid)?.role === 'developer' && (
+                <option value="developer">Developer</option>
+              )}
+              <option value="admin">Administrator</option>
+              <option value="staff">Staff/Faculty</option>
+              <option value="student_assistant">Student Assistant</option>
+           </select>
+         ) : (
+           <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.role === 'admin' || m.role === 'developer' ? 'bg-[#3ecf8e]/20 text-[#3ecf8e]' : 'bg-[#a1a1a1]/20 text-[#a1a1a1]'}`}>
+             {m.role?.replace('_', ' ')}
+           </span>
+         )}
+      </td>
+      <td className="px-6 py-4 text-[#a1a1a1] text-xs">
+         {displayDate}
+      </td>
+    </tr>
+  )})}
+</tbody>//------end of table body--
                   </table>
                 </div>
                 
