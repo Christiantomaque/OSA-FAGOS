@@ -64,21 +64,11 @@ export const onAuthStateChanged = (authObj: any, cb: (user: User | null) => void
         displayName: u.user_metadata?.full_name 
     } : null;
 
-    // ✅ Use getSession() instead of getUser() — getSession() NEVER throws on expired tokens
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        cb(firebaseUser(session?.user ?? null));
-      })
-      .catch(() => {
-        // If even getSession fails (network error), still call callback with null
-        cb(null);
-      });
-
-    // Listen for future auth changes
+    // Fix for Supabase v2: use getUser and onAuthStateChange correctly
+    supabase.auth.getUser().then(({ data: { user } }) => cb(firebaseUser(user)));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        cb(firebaseUser(session?.user ?? null));
+        cb(firebaseUser(session?.user));
     });
-    
     return () => subscription.unsubscribe();
 };
 

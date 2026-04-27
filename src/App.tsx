@@ -9,7 +9,6 @@ import Developer from './pages/Developer';
 import Login from './pages/Login';
 import { HelpGuide } from './components/HelpGuide';
 import { Loader2, ShieldCheck, ArrowRight, Copy, Check, Info, AlertCircle } from 'lucide-react';
-import { supabaseUrl, supabaseAnonKey } from './lib/supabase';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
@@ -27,62 +26,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const isSyncing = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
-
-  // ── Online/offline tracking refs ──
-  const userIdRef = useRef<string | null>(null);
-  const accessTokenRef = useRef<string | null>(null);
-
-  // ── ONLINE/OFFLINE TRACKING ──
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        userIdRef.current = session.user.id;
-        accessTokenRef.current = session.access_token;
-        try {
-          await supabase
-            .from('admins')
-            .update({ is_online: true, lastLogin: new Date().toISOString() })
-            .eq('id', session.user.id);
-        } catch (e) {}
-      }
-    });
-
-    const handleBeforeUnload = () => {
-      const uid = userIdRef.current;
-      const token = accessTokenRef.current;
-      if (uid && token) {
-        fetch(`${supabaseUrl}/rest/v1/admins?id=eq.${uid}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ is_online: false }),
-          keepalive: true,
-        });
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      subscription?.unsubscribe();
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
-
-  // ── SIGN OUT WITH OFFLINE ──
-  const signOutWithOffline = async () => {
-    try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) {
-        await supabase.from('admins').update({ is_online: false }).eq('id', currentUser.id);
-      }
-    } catch (e) {}
-    await supabase.auth.signOut();
-  };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(null, async (u) => {
@@ -290,7 +233,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             </button>
           </form>
 
-          <button onClick={signOutWithOffline} className="mt-6 text-[9px] text-[#555] hover:text-[#ededed] transition-colors uppercase font-bold tracking-widest">
+          <button onClick={() => supabase.auth.signOut()} className="mt-6 text-[9px] text-[#555] hover:text-[#ededed] transition-colors uppercase font-bold tracking-widest">
             Sign out of account
           </button>
         </div>
