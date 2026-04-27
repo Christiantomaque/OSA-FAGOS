@@ -12,12 +12,18 @@ const LiveClock = ({
   onTimeUp?: () => void;
 }) => {
   const [totalSeconds, setTotalSeconds] = useState(accumulatedSeconds);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [isAutoStopped, setIsAutoStopped] = useState(false);
   const hasFired = useRef(false);
 
   useEffect(() => {
     if (!startTime) {
       setTotalSeconds(accumulatedSeconds);
+      if (scheduledEndTime) {
+         const endTarget = new Date(scheduledEndTime).getTime();
+         const rem = Math.floor((endTarget - Date.now()) / 1000);
+         setRemainingSeconds(rem > 0 ? rem : 0);
+      }
       return;
     }
 
@@ -36,6 +42,9 @@ const LiveClock = ({
 
     const updateClock = () => {
       const now = Date.now();
+
+      const rem = endTarget !== Infinity ? Math.floor((endTarget - now) / 1000) : null;
+      setRemainingSeconds(rem !== null && rem > 0 ? rem : 0);
 
       if (now >= endTarget) {
         const delta = Math.floor((endTarget - start) / 1000);
@@ -69,32 +78,40 @@ const LiveClock = ({
     onTimeUp,
   ]);
 
-  const formatDynamicTime = (secs: number) => {
-    if (secs < 60) return `${secs} SEC${secs !== 1 ? "S" : ""}`;
-    if (secs < 3600) {
-      const mins = Math.floor(secs / 60);
-      return `${mins} MIN${mins !== 1 ? "S" : ""}`;
-    }
-    const hrs = Number((secs / 3600).toFixed(1));
-    return `${hrs} HR${hrs !== 1 ? "S" : ""}`;
-  };
-
   const hrs = Math.floor(totalSeconds / 3600);
   const mins = Math.floor((totalSeconds % 3600) / 60);
   const secs = totalSeconds % 60;
 
+  let rHrs = 0; let rMins = 0; let rSecs = 0;
+  if (remainingSeconds !== null) {
+      rHrs = Math.floor(remainingSeconds / 3600);
+      rMins = Math.floor((remainingSeconds % 3600) / 60);
+      rSecs = remainingSeconds % 60;
+  }
+
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-2">
-        <span
-          className={`font-mono text-lg font-black tracking-tighter ${isAutoStopped ? "text-red-500" : "text-[#3ecf8e]"}`}
-        >
-          {hrs.toString().padStart(2, "0")}:{mins.toString().padStart(2, "0")}:
-          {secs.toString().padStart(2, "0")}
-        </span>
-        <span className="text-[10px] font-bold text-[#a1a1a1] uppercase bg-[#262626] px-1.5 py-0.5 rounded border border-[#2e2e2e]">
-          {formatDynamicTimeDisplay(totalSeconds)}
-        </span>
+      <div className="flex flex-col items-center gap-1">
+        {remainingSeconds !== null && !isAutoStopped ? (
+            <div className="flex flex-col items-center">
+               <span className="text-[9px] font-bold text-[#a1a1a1] uppercase tracking-widest mb-0.5">Remaining Time</span>
+               <span className="font-mono text-lg font-black tracking-tighter text-amber-500">
+                  {rHrs.toString().padStart(2, "0")}:{rMins.toString().padStart(2, "0")}:{rSecs.toString().padStart(2, "0")}
+               </span>
+            </div>
+        ) : (
+            <div className="flex items-center gap-2">
+              <span
+                className={`font-mono text-lg font-black tracking-tighter ${isAutoStopped ? "text-red-500" : "text-[#3ecf8e]"}`}
+              >
+                {hrs.toString().padStart(2, "0")}:{mins.toString().padStart(2, "0")}:
+                {secs.toString().padStart(2, "0")}
+              </span>
+              <span className="text-[10px] font-bold text-[#a1a1a1] uppercase bg-[#262626] px-1.5 py-0.5 rounded border border-[#2e2e2e]">
+                {formatDynamicTimeDisplay(totalSeconds)}
+              </span>
+            </div>
+        )}
       </div>
       {isAutoStopped && (
         <span className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 bg-red-500/10 px-2 py-0.5 rounded">
@@ -876,32 +893,27 @@ export default function Admin() {
     try {
       const now = new Date();
       let deltaSeconds = 0;
+      let schEndObj: Date | null = null;
+
+      if (record.scheduledEndTime) {
+         schEndObj = new Date(record.scheduledEndTime);
+         const startRef = record.scheduledStartTime ? new Date(record.scheduledStartTime) : (record.timeIn ? new Date(record.timeIn) : now);
+         if (schEndObj.getTime() <= startRef.getTime()) {
+           schEndObj.setDate(schEndObj.getDate() + 1);
+         }
+      }
+
+      const effectiveNow = schEndObj && now.getTime() > schEndObj.getTime() ? schEndObj : now;
+
       if (record.startTime) {
         const start = new Date(record.startTime);
-        deltaSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+        if (effectiveNow.getTime() > start.getTime()) {
+           deltaSeconds = Math.floor((effectiveNow.getTime() - start.getTime()) / 1000);
+        }
       }
+      
       const newAccumulated = (record.accumulated_seconds || 0) + deltaSeconds;
-
       let durationHours = newAccumulated / 3600;
-
-      // Late Penalty Logic
-      const startTimeObj = record.timeIn ? new Date(record.timeIn) : now;
-      if (record.scheduledEndTime) {
-        const schEndObj = new Date(record.scheduledEndTime);
-        if (
-          schEndObj.getTime() <=
-          (record.scheduledStartTime
-            ? new Date(record.scheduledStartTime).getTime()
-            : startTimeObj.getTime())
-        ) {
-          schEndObj.setDate(schEndObj.getDate() + 1);
-        }
-
-        if (now.getTime() > schEndObj.getTime()) {
-          durationHours =
-            (schEndObj.getTime() - startTimeObj.getTime()) / (1000 * 60 * 60);
-        }
-      }
 
       if (durationHours < 0) durationHours = 0;
       const creditHours = Math.max(
@@ -941,12 +953,18 @@ export default function Admin() {
           )?.endTime ||
           Date.now(),
       );
-      const startObj = new Date(
-        record.timeIn || record.startTime || Date.now(),
-      );
 
-      let durationHours =
-        (endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60);
+      let deltaSeconds = 0;
+      if (record.startTime) {
+         const start = new Date(record.startTime);
+         if (endObj.getTime() > start.getTime()) {
+             deltaSeconds = Math.floor((endObj.getTime() - start.getTime()) / 1000);
+         }
+      }
+
+      const newAccumulated = (record.accumulated_seconds || 0) + deltaSeconds;
+      let durationHours = newAccumulated / 3600;
+
       if (durationHours < 0) durationHours = 0;
       const creditHours = Math.max(
         0,
@@ -957,9 +975,7 @@ export default function Admin() {
       await updateDoc(doc(db, "service_records", record.id), {
         timeOut: endObj.toISOString(),
         creditHours: creditHours,
-        accumulated_seconds: Math.floor(
-          (endObj.getTime() - startObj.getTime()) / 1000,
-        ),
+        accumulated_seconds: newAccumulated,
         startTime: null,
         status: "pending", // <--- CRITICAL: Must be 'pending' so the Admin can manually click Approve
         updatedAt: serverTimestamp(),
@@ -2249,6 +2265,11 @@ export default function Admin() {
                                 {formatDate(r.date)} | {formatTime(r.timeIn)} -{" "}
                                 {formatTime(r.timeOut)}
                               </div>
+                              {(r.status === 'active' || r.status === 'paused') && r.startTime && (
+                                <div className="text-[9px] text-[#3ecf8e] font-mono mt-1 uppercase tracking-wide">
+                                  <span className="text-[#a1a1a1]">Actual Start:</span> {formatTime(new Date(r.startTime).toISOString())}
+                                </div>
+                              )}
                             </td>
                             <td className="px-6 py-4 text-center">
                               <span
@@ -2485,6 +2506,11 @@ export default function Admin() {
                               {formatTime(r.timeIn)} - {formatTime(r.timeOut)}
                             </span>
                           </div>
+                          {(r.status === 'active' || r.status === 'paused') && r.startTime && (
+                            <div className="text-[9px] text-[#3ecf8e] font-mono mt-1 uppercase tracking-wide text-right">
+                              <span className="text-[#a1a1a1]">Actual Start:</span> {formatTime(new Date(r.startTime).toISOString())}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex justify-between items-center gap-4 pt-2 border-t border-[#2e2e2e]">
@@ -3183,10 +3209,14 @@ export default function Admin() {
                   </div>
                   <button
                     onClick={handleToggleSignups}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      allowSignups ? "bg-[#3ecf8e]" : "bg-[#2e2e2e]"
+                    }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowSignups ? "translate-x-6" : "translate-x-1"}`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        allowSignups ? "translate-x-6" : "translate-x-1"
+                      }`}
                     />
                   </button>
                 </div>
@@ -3216,88 +3246,60 @@ export default function Admin() {
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // ── ONLINE STATUS ──
-                          // Use dedicated field if exists; otherwise fall back to time-based
-                          let isOnline = false;
-                          if (typeof (m as any).is_online === "boolean") {
-                            isOnline = (m as any).is_online;
-                          } else {
-                            // Time-based fallback (handles old data)
-                            let dateObj: Date | null = null;
-                            try {
-                              if (m.lastLogin) {
-                                if (m.lastLogin instanceof Date) {
-                                  dateObj = m.lastLogin;
-                                } else if (
-                                  typeof m.lastLogin === "string" ||
-                                  typeof m.lastLogin === "number"
-                                ) {
-                                  const d = new Date(m.lastLogin);
-                                  if (!isNaN(d.getTime())) dateObj = d;
-                                }
-                              }
-                            } catch (_) {}
-                            if (dateObj && !isNaN(dateObj.getTime())) {
-                              const diff = Date.now() - dateObj.getTime();
-                              // Only online if in the past (with 30s grace) and within 5 minutes
-                              isOnline = diff > -30_000 && diff < 300_000;
-                            }
+                          // ----------------------------------------------------------------
+                          // 1.  Parse lastLogin to a real Date (handles Supabase strings)
+                          // ----------------------------------------------------------------
+                          let dateObj: Date | null = null;
+                          if (m.lastLogin) {
+                            const parsed =
+                              typeof m.lastLogin === "object" &&
+                              (m.lastLogin as any).toDate
+                                ? (m.lastLogin as any).toDate() // Firestore (unlikely but safe)
+                                : new Date(m.lastLogin); // Supabase returns ISO string
+                            if (!isNaN(parsed.getTime())) dateObj = parsed;
                           }
 
-                          // ── LAST ACTIVE DISPLAY (robust parsing, Supabase strings) ──
-                          let dateObj: Date | null = null;
-                          try {
-                            if (m.lastLogin) {
-                              if (m.lastLogin instanceof Date) {
-                                dateObj = m.lastLogin;
-                              } else if (
-                                typeof m.lastLogin === "string" ||
-                                typeof m.lastLogin === "number"
-                              ) {
-                                const d = new Date(m.lastLogin);
-                                if (!isNaN(d.getTime())) dateObj = d;
-                              }
-                            }
-                          } catch (_) {}
-                          const isValid = dateObj && !isNaN(dateObj.getTime());
+                          // ----------------------------------------------------------------
+                          // 2.  ONLINE / OFFLINE decision
+                          //     Prefer is_online from DB; otherwise use 2‑minute time window
+                          // ----------------------------------------------------------------
+                          const dbOnline = (m as any).is_online; // from your admins table
+                          let isOnline = false;
+                          if (typeof dbOnline === "boolean") {
+                            isOnline = dbOnline;
+                          } else if (dateObj) {
+                            // Only online if lastLogin is within 2 minutes AND not in the future
+                            const diff = Date.now() - dateObj.getTime();
+                            isOnline = diff > -30_000 && diff < 120_000;
+                          }
+
+                          // ----------------------------------------------------------------
+                          // 3.  Last Active display text (safe formatting)
+                          // ----------------------------------------------------------------
                           let displayDate = "Never";
-                          if (isValid && dateObj) {
+                          if (dateObj) {
                             try {
                               const formatted = formatDate(
                                 dateObj.toISOString(),
                               );
-                              // Guard against "INVALID DATE" from formatDate
-                              if (
-                                !formatted ||
-                                formatted === "INVALID DATE" ||
-                                formatted.toUpperCase().includes("INVALID")
-                              ) {
-                                displayDate = dateObj.toLocaleDateString(
-                                  "en-US",
-                                  {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                    hour12: true,
-                                  },
-                                );
-                              } else {
-                                displayDate = formatted;
-                              }
-                            } catch (_) {
-                              displayDate = dateObj.toLocaleDateString(
-                                "en-US",
-                                {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                  hour12: true,
-                                },
-                              );
+                              displayDate =
+                                !formatted || /invalid/i.test(formatted)
+                                  ? dateObj.toLocaleString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                      hour12: true,
+                                    })
+                                  : formatted;
+                            } catch {
+                              displayDate = dateObj.toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                                hour12: true,
+                              });
                             }
                           }
 
@@ -3328,7 +3330,7 @@ export default function Admin() {
                                     />
                                   ) : (
                                     <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                      {(m.displayName || m.email || "?")
+                                      {(m.displayName || "?")
                                         .charAt(0)
                                         .toUpperCase()}
                                     </div>
@@ -3359,7 +3361,7 @@ export default function Admin() {
                                         m.role,
                                       )
                                     }
-                                    className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
+                                    className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none text-[#ededed]"
                                   >
                                     <option
                                       value="developer"
@@ -3378,14 +3380,7 @@ export default function Admin() {
                                     </option>
                                   </select>
                                 ) : (
-                                  <span
-                                    className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
-                                      m.role === "admin" ||
-                                      m.role === "developer"
-                                        ? "bg-[#3ecf8e]/20 text-[#3ecf8e]"
-                                        : "bg-[#a1a1a1]/20 text-[#a1a1a1]"
-                                    }`}
-                                  >
+                                  <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/10 text-[#3ecf8e]">
                                     {m.role?.replace("_", " ")}
                                   </span>
                                 )}
@@ -3399,6 +3394,195 @@ export default function Admin() {
                       )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Card View (same logic, adapted) */}
+                <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                  {filteredMembers.length === 0 ? (
+                    <div className="p-6 text-center text-[#a1a1a1] text-xs">
+                      No members found matching your search.
+                    </div>
+                  ) : (
+                    filteredMembers.map((m) => {
+                      // --- Duplicated logic (or extract a helper) ---
+                      let dateObj: Date | null = null;
+                      if (m.lastLogin) {
+                        const parsed =
+                          typeof m.lastLogin === "object" &&
+                          (m.lastLogin as any).toDate
+                            ? (m.lastLogin as any).toDate()
+                            : new Date(m.lastLogin);
+                        if (!isNaN(parsed.getTime())) dateObj = parsed;
+                      }
+
+                      const dbOnline = (m as any).is_online;
+                      let isOnline = false;
+                      if (typeof dbOnline === "boolean") {
+                        isOnline = dbOnline;
+                      } else if (dateObj) {
+                        const diff = Date.now() - dateObj.getTime();
+                        isOnline = diff > -30_000 && diff < 120_000;
+                      }
+
+                      let displayDate = "Never";
+                      if (dateObj) {
+                        try {
+                          const formatted = formatDate(dateObj.toISOString());
+                          displayDate =
+                            !formatted || /invalid/i.test(formatted)
+                              ? dateObj.toLocaleString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })
+                              : formatted;
+                        } catch {
+                          displayDate = dateObj.toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          });
+                        }
+                      }
+
+                      const initial = (m.displayName || m.email || "?")
+                        .charAt(0)
+                        .toUpperCase();
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="p-4 space-y-3 hover:bg-[#1c1c1c]"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              {m.photoURL ? (
+                                <img
+                                  src={m.photoURL}
+                                  alt=""
+                                  className="w-10 h-10 rounded-full border border-[#2e2e2e]"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                  {initial}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="font-bold text-[#ededed] truncate">
+                                  {m.displayName || "User"}
+                                </div>
+                                <div className="text-[10px] text-[#a1a1a1] truncate">
+                                  {m.email}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <div
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"
+                                  }`}
+                                />
+                                <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
+                                  {isOnline ? "Online" : "Offline"}
+                                </span>
+                              </div>
+                              <div className="text-[9px] text-[#666]">
+                                {displayDate}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                            <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                              System Role
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/20 text-[#3ecf8e]">
+                              {m.role?.replace("_", " ")}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "settings" && (
+            <div className="space-y-8 max-w-4xl">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight">
+                  Account Settings
+                </h2>
+                <p className="text-[#a1a1a1] text-sm mt-1">
+                  Manage your staff profile and digital signature for
+                  verification.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-[#171717] border border-[#2e2e2e] p-6 rounded-xl shadow-lg space-y-6">
+                  <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-[#3ecf8e]">
+                    <Users className="w-4 h-4" /> Personal Information
+                  </h3>
+                  <form onSubmit={handleUpdateProfile} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                        Full Name
+                      </label>
+                      <input
+                        value={profileForm.displayName}
+                        onChange={(e) =>
+                          setProfileForm({
+                            ...profileForm,
+                            displayName: e.target.value,
+                          })
+                        }
+                        className="w-full bg-[#1c1c1c] border border-[#2e2e2e] rounded p-2 text-sm focus:border-[#3ecf8e] outline-none"
+                        placeholder="Your Name"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                        System Role
+                      </label>
+                      <input
+                        value={
+                          profileForm.role?.replace("_", " ").toUpperCase() ||
+                          "N/A"
+                        }
+                        disabled
+                        className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed uppercase font-bold tracking-widest"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                        Email Address
+                      </label>
+                      <input
+                        value={user?.email || ""}
+                        disabled
+                        className="w-full bg-[#1c1c1c]/50 border border-[#2e2e2e] rounded p-2 text-sm text-[#666] cursor-not-allowed"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isUpdatingProfile}
+                      className="w-full bg-[#3ecf8e] hover:bg-[#34b27b] text-black font-bold py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                      {isUpdatingProfile ? (
+                        <Loader2 className="animate-spin w-4 h-4" />
+                      ) : (
+                        <Edit2 className="w-4 h-4" />
+                      )}
+                      Update Profile
+                    </button>
+                  </form>
                 </div>
 
                 {/* Mobile Card View */}
