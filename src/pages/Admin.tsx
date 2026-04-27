@@ -3210,37 +3210,33 @@ export default function Admin() {
                             colSpan={4}
                             className="px-6 py-10 text-center text-[#a1a1a1]"
                           >
-                            No members found.
+                            No members found matching your search.
                           </td>
                         </tr>
                       ) : (
                         filteredMembers.map((m) => {
-                          // 🚨 DISKAR'S BULLETPROOF DATE LOGIC 🚨
-                          let dateObj = null;
-                          if (m.lastLogin) {
-                            if (
-                              typeof m.lastLogin === "object" &&
-                              m.lastLogin.toDate
-                            )
-                              dateObj = m.lastLogin.toDate();
-                            else if (
-                              typeof m.lastLogin === "object" &&
-                              m.lastLogin.seconds
-                            )
-                              dateObj = new Date(m.lastLogin.seconds * 1000);
-                            else dateObj = new Date(m.lastLogin);
+                          // 🚨 THE "TRIPLE-CHECK" LOGIC 🚨
+                          const rawDate = m.lastLogin;
+                          let dateObj: Date | null = null;
+
+                          if (rawDate) {
+                            const d =
+                              typeof rawDate === "object" && rawDate.toDate
+                                ? rawDate.toDate()
+                                : new Date(rawDate);
+                            if (!isNaN(d.getTime())) dateObj = d;
                           }
 
-                          const isValid = dateObj && !isNaN(dateObj.getTime());
-                          const diff = isValid
-                            ? Date.now() - dateObj.getTime()
-                            : Infinity;
-                          // Fix: Must be positive AND less than 5 mins to be "Online"
-                          const isOnline =
-                            isValid && diff >= 0 && diff < 300000;
-                          const displayDate = isValid
+                          // online only if date is valid AND within 5 mins AND not in the future (clock drift)
+                          const isOnline = dateObj
+                            ? Math.abs(Date.now() - dateObj.getTime()) < 300000
+                            : false;
+                          const displayDate = dateObj
                             ? formatDate(dateObj.toISOString())
                             : "Never";
+                          const initial = (m.displayName || m.email || "?")
+                            .charAt(0)
+                            .toUpperCase();
 
                           return (
                             <tr key={m.id} className="hover:bg-[#1c1c1c]">
@@ -3261,15 +3257,16 @@ export default function Admin() {
                                       src={m.photoURL}
                                       alt=""
                                       className="w-8 h-8 rounded-full border border-[#2e2e2e]"
+                                      referrerPolicy="no-referrer"
                                     />
                                   ) : (
                                     <div className="w-8 h-8 rounded-full bg-[#262626] border border-[#2e2e2e] flex items-center justify-center font-bold text-[#a1a1a1]">
-                                      {m.displayName.charAt(0)}
+                                      {initial}
                                     </div>
                                   )}
                                   <div>
                                     <div className="font-bold text-[#ededed]">
-                                      {m.displayName}
+                                      {m.displayName || "Unnamed User"}
                                     </div>
                                     <div className="text-[10px] text-[#a1a1a1]">
                                       {m.email}
@@ -3295,12 +3292,16 @@ export default function Admin() {
                                     }
                                     className="bg-[#1c1c1c] border border-[#2e2e2e] rounded text-xs px-2 py-1 outline-none focus:border-[#3ecf8e] text-[#ededed]"
                                   >
-                                    {members.find((usr) => usr.id === user?.uid)
-                                      ?.role === "developer" && (
-                                      <option value="developer">
-                                        Developer
-                                      </option>
-                                    )}
+                                    <option
+                                      value="developer"
+                                      disabled={
+                                        members.find(
+                                          (usr) => usr.id === user?.uid,
+                                        )?.role !== "developer"
+                                      }
+                                    >
+                                      Developer
+                                    </option>
                                     <option value="admin">Administrator</option>
                                     <option value="staff">Staff/Faculty</option>
                                     <option value="student_assistant">
@@ -3325,7 +3326,88 @@ export default function Admin() {
                     </tbody>
                   </table>
                 </div>
-                {/* Mobile Card View uses exact same logic - omitting for brevity but apply the same isValid/isOnline logic there */}
+
+                {/* Mobile Card View (Applying same atomic fix) */}
+                <div className="md:hidden flex flex-col divide-y divide-[#2e2e2e]">
+                  {filteredMembers.length === 0 ? (
+                    <div className="p-8 text-center text-[#a1a1a1] text-sm">
+                      No members found.
+                    </div>
+                  ) : (
+                    filteredMembers.map((m) => {
+                      const rawDate = m.lastLogin;
+                      let dateObj: Date | null = null;
+                      if (rawDate) {
+                        const d =
+                          typeof rawDate === "object" && rawDate.toDate
+                            ? rawDate.toDate()
+                            : new Date(rawDate);
+                        if (!isNaN(d.getTime())) dateObj = d;
+                      }
+                      const isOnline = dateObj
+                        ? Math.abs(Date.now() - dateObj.getTime()) < 300000
+                        : false;
+                      const displayDate = dateObj
+                        ? formatDate(dateObj.toISOString())
+                        : "Never";
+                      const initial = (m.displayName || m.email || "?")
+                        .charAt(0)
+                        .toUpperCase();
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="p-4 space-y-4 hover:bg-[#1c1c1c]"
+                        >
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              {m.photoURL ? (
+                                <img
+                                  src={m.photoURL}
+                                  alt=""
+                                  className="w-10 h-10 rounded-full border border-[#2e2e2e]"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center font-bold text-[#a1a1a1]">
+                                  {initial}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="font-bold text-[#ededed] truncate">
+                                  {m.displayName || "Unnamed User"}
+                                </div>
+                                <div className="text-[10px] text-[#a1a1a1] truncate">
+                                  {m.email}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <div
+                                  className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-[#3ecf8e]" : "bg-[#a1a1a1]"}`}
+                                />
+                                <span className="text-[9px] uppercase font-bold text-[#a1a1a1]">
+                                  {isOnline ? "Online" : "Offline"}
+                                </span>
+                              </div>
+                              <div className="text-[9px] text-[#666]">
+                                {displayDate}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center bg-[#1c1c1c] p-2 rounded border border-[#2e2e2e]">
+                            <span className="text-[10px] uppercase font-bold text-[#a1a1a1]">
+                              System Role
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-[#3ecf8e]/20 text-[#3ecf8e]">
+                              {m.role?.replace("_", " ")}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           )}
