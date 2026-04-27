@@ -411,9 +411,9 @@ export default function Admin() {
     if (!user) return;
     setIsUpdatingProfile(true);
     try {
+      // SECURITY FIX: Completely removed the ability to push a 'role' update from the personal profile form.
       await updateDoc(doc(db, 'admins', user.uid), {
         displayName: profileForm.displayName,
-        role: profileForm.role,
         updatedAt: serverTimestamp()
       });
       showAlert("Profile Updated", "Your profile information has been successfully updated.", "success");

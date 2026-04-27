@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, doc, getDoc, setDoc, updateDoc, serverTimestamp, db, supabase, User } from './lib/supabase';
 import Portal from './pages/Portal';
 import Admin from './pages/Admin';
@@ -30,6 +30,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const unsub = onAuthStateChanged(null, async (u) => {
       if (isSyncing.current) return;
       isSyncing.current = true;
+      const location = useLocation();
 
       try {
         if (u) {
@@ -141,8 +142,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const routes: Record<string, string> = { developer: '/developer', admin: '/admin', staff: '/staff', student_assistant: '/student-assistant' };
     const targetPath = routes[role] || '/staff';
     
-    // Force routing to fix the "stuck on login" bug
-    if (window.location.pathname === '/login') {
+    // Intercept both the login page AND the root portal page
+    if (location.pathname === '/login' || location.pathname === '/') {
       navigate(targetPath, { replace: true });
     }
   };
